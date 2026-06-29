@@ -627,6 +627,39 @@
   </div>
 </div>
 
+<!-- MODAL DETALHE OS -->
+<div id="pg-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;align-items:flex-start;justify-content:center;padding:40px 16px;overflow-y:auto;">
+  <div style="background:#fff;border-radius:16px;width:100%;max-width:860px;overflow:hidden;box-shadow:0 8px 40px rgba(0,0,0,.25);">
+    <div style="background:#0d1b2a;padding:16px 20px;display:flex;align-items:center;justify-content:space-between;border-bottom:3px solid #e8a020;">
+      <div>
+        <div style="color:#fff;font-size:15px;font-weight:700;" id="pg-modal-title">Detalhes das OS</div>
+        <div style="color:#8097b8;font-size:11px;margin-top:2px;" id="pg-modal-sub"></div>
+      </div>
+      <button onclick="pgFecharModal()" style="background:transparent;border:1px solid #8097b8;color:#8097b8;border-radius:8px;padding:6px 14px;font-size:12px;cursor:pointer;">✕ Fechar</button>
+    </div>
+    <div style="padding:16px;max-height:70vh;overflow-y:auto;">
+      <input type="text" id="pg-modal-search" placeholder="Buscar por OS, cliente, endereço..." oninput="pgFiltrarModal()"
+        style="width:100%;padding:8px 12px;border:1px solid #e4e8ef;border-radius:8px;font-size:13px;margin-bottom:12px;">
+      <div style="overflow-x:auto;">
+        <table style="width:100%;border-collapse:collapse;font-size:12px;">
+          <thead>
+            <tr style="background:#0d1b2a;color:#fff;">
+              <th style="padding:8px 10px;text-align:left;font-size:9px;text-transform:uppercase;letter-spacing:1px;white-space:nowrap;">N. Serviço</th>
+              <th style="padding:8px 10px;text-align:left;font-size:9px;text-transform:uppercase;letter-spacing:1px;">Tipo</th>
+              <th style="padding:8px 10px;text-align:left;font-size:9px;text-transform:uppercase;letter-spacing:1px;">Equipe</th>
+              <th style="padding:8px 10px;text-align:left;font-size:9px;text-transform:uppercase;letter-spacing:1px;">Cliente</th>
+              <th style="padding:8px 10px;text-align:left;font-size:9px;text-transform:uppercase;letter-spacing:1px;">Endereço</th>
+              <th style="padding:8px 10px;text-align:left;font-size:9px;text-transform:uppercase;letter-spacing:1px;white-space:nowrap;">Prazo</th>
+              <th style="padding:8px 10px;text-align:left;font-size:9px;text-transform:uppercase;letter-spacing:1px;">Município</th>
+            </tr>
+          </thead>
+          <tbody id="pg-modal-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div id="toast"></div>
 
 <script>
@@ -1492,23 +1525,23 @@ function pgRenderKPIs(dados) {
     if (r['Código Equipe']) eqs.add(r['Código Equipe']);
   });
   document.getElementById('pg-kpis').innerHTML = `
-    <div style="background:#fdecea;border-radius:12px;padding:14px 16px;">
-      <div style="font-size:10px;color:#c0392b;text-transform:uppercase;letter-spacing:.8px;font-weight:700;margin-bottom:6px;">Estouradas</div>
+    <div onclick="pgAbrirModal('est')" style="background:#fdecea;border-radius:12px;padding:14px 16px;cursor:pointer;transition:opacity .15s;" onmouseover="this.style.opacity='.8'" onmouseout="this.style.opacity='1'">
+      <div style="font-size:10px;color:#c0392b;text-transform:uppercase;letter-spacing:.8px;font-weight:700;margin-bottom:6px;">⚠ Estouradas</div>
       <div style="font-size:28px;font-weight:700;color:#c0392b;line-height:1;">${est}</div>
-      <div style="font-size:11px;color:#e57373;margin-top:4px;">${((est/dados.length)*100||0).toFixed(1)}% do total</div>
+      <div style="font-size:11px;color:#e57373;margin-top:4px;">${((est/dados.length)*100||0).toFixed(1)}% · clique pra ver</div>
     </div>
-    <div style="background:#fff3e8;border-radius:12px;padding:14px 16px;">
-      <div style="font-size:10px;color:#d35400;text-transform:uppercase;letter-spacing:.8px;font-weight:700;margin-bottom:6px;">Vencem hoje</div>
+    <div onclick="pgAbrirModal('hj')" style="background:#fff3e8;border-radius:12px;padding:14px 16px;cursor:pointer;transition:opacity .15s;" onmouseover="this.style.opacity='.8'" onmouseout="this.style.opacity='1'">
+      <div style="font-size:10px;color:#d35400;text-transform:uppercase;letter-spacing:.8px;font-weight:700;margin-bottom:6px;">⏰ Vencem hoje</div>
       <div style="font-size:28px;font-weight:700;color:#d35400;line-height:1;">${hj}</div>
-      <div style="font-size:11px;color:#ffb74d;margin-top:4px;">até 09:00 amanhã</div>
+      <div style="font-size:11px;color:#ffb74d;margin-top:4px;">até 09:00 amanhã · clique pra ver</div>
     </div>
-    <div style="background:#eaf7ef;border-radius:12px;padding:14px 16px;">
-      <div style="font-size:10px;color:#1a7a40;text-transform:uppercase;letter-spacing:.8px;font-weight:700;margin-bottom:6px;">No prazo</div>
+    <div onclick="pgAbrirModal('ok')" style="background:#eaf7ef;border-radius:12px;padding:14px 16px;cursor:pointer;transition:opacity .15s;" onmouseover="this.style.opacity='.8'" onmouseout="this.style.opacity='1'">
+      <div style="font-size:10px;color:#1a7a40;text-transform:uppercase;letter-spacing:.8px;font-weight:700;margin-bottom:6px;">✓ No prazo</div>
       <div style="font-size:28px;font-weight:700;color:#1a7a40;line-height:1;">${ok}</div>
-      <div style="font-size:11px;color:#66bb6a;margin-top:4px;">${((ok/dados.length)*100||0).toFixed(1)}% do total</div>
+      <div style="font-size:11px;color:#66bb6a;margin-top:4px;">${((ok/dados.length)*100||0).toFixed(1)}% · clique pra ver</div>
     </div>
     <div style="background:#eef3fb;border-radius:12px;padding:14px 16px;">
-      <div style="font-size:10px;color:#1565c0;text-transform:uppercase;letter-spacing:.8px;font-weight:700;margin-bottom:6px;">Total em campo</div>
+      <div style="font-size:10px;color:#1565c0;text-transform:uppercase;letter-spacing:.8px;font-weight:700;margin-bottom:6px;">📋 Total em campo</div>
       <div style="font-size:28px;font-weight:700;color:#1565c0;line-height:1;">${dados.length}</div>
       <div style="font-size:11px;color:#90caf9;margin-top:4px;">${eqs.size} equipes</div>
     </div>`;
@@ -1594,6 +1627,84 @@ function pgRenderEquipesCriticas(dados) {
     </div>`;
   });
   document.getElementById('pg-equipes-criticas').innerHTML = `<div style="grid-column:1/-1;">${html}</div>`;
+}
+
+let pgModalDados = [];
+
+function pgAbrirModal(tipo) {
+  const dados = pgGetFiltrado();
+  const labels = { est: '⚠ OS Estouradas', hj: '⏰ OS que vencem hoje', ok: '✓ OS no prazo' };
+  pgModalDados = dados.filter(r => getPrioridade(r) === tipo);
+  document.getElementById('pg-modal-title').textContent = labels[tipo];
+  document.getElementById('pg-modal-sub').textContent = pgModalDados.length + ' ordens de serviço · ' + pgRegiao;
+  document.getElementById('pg-modal-search').value = '';
+  pgFiltrarModal();
+  document.getElementById('pg-modal').style.display = 'flex';
+}
+
+function pgFecharModal() {
+  document.getElementById('pg-modal').style.display = 'none';
+}
+
+// Fechar ao clicar fora
+document.addEventListener('click', function(e) {
+  const modal = document.getElementById('pg-modal');
+  if (e.target === modal) pgFecharModal();
+});
+
+function pgFiltrarModal() {
+  const q = document.getElementById('pg-modal-search').value.toLowerCase();
+  const filtrado = q
+    ? pgModalDados.filter(r =>
+        (r['Numero de Serviço']||'').toLowerCase().includes(q) ||
+        (r['Nome e Sobrenome Cliente']||'').toLowerCase().includes(q) ||
+        (r['Endereço Completo']||'').toLowerCase().includes(q) ||
+        (r['Código Equipe']||'').toLowerCase().includes(q)
+      )
+    : pgModalDados;
+
+  const tOrdemLabel = r => {
+    const t = getTipoOrdem(r);
+    if (t==='REG') return '<span style="background:#e8f4fd;color:#1565c0;border-radius:3px;padding:1px 5px;font-size:9px;font-weight:700;">REG</span>';
+    if (t==='NREG') return '<span style="background:#fff3e8;color:#bf360c;border-radius:3px;padding:1px 5px;font-size:9px;font-weight:700;">NR</span>';
+    return '';
+  };
+
+  const rows = filtrado.sort((a,b) => {
+    const da = parseDateTimeStr(a['Data Prevista Finalização Trabalhos']);
+    const db = parseDateTimeStr(b['Data Prevista Finalização Trabalhos']);
+    if (!da && !db) return 0; if (!da) return 1; if (!db) return -1;
+    return da - db;
+  });
+
+  let html = '';
+  rows.forEach((r, i) => {
+    const ns = r['Numero de Serviço'] || '—';
+    const tipo = (r[' Tipo de Serviço'] || r['Tipo de Serviço'] || '').trim();
+    const cod = r['Código Equipe'] || '—';
+    const cliente = r['Nome e Sobrenome Cliente'] || '—';
+    const end = r['Endereço Completo'] || '—';
+    const prazo = (r['Data Prevista Finalização Trabalhos'] || '—').replace(' 23:59','');
+    const muni = r['Município'] || '—';
+    const lat = r['Latitude'] || '';
+    const lng = r['Longitude'] || '';
+    const gps = lat && lng
+      ? ' <a href="https://www.google.com/maps?q=' + lat + ',' + lng + '" target="_blank" style="text-decoration:none;">📍</a>'
+      : '';
+    const bg = i%2===0?'#fff':'#f8fafc';
+    html += '<tr style="background:' + bg + ';border-bottom:1px solid #e8edf5;">'
+      + '<td style="padding:7px 10px;font-family:monospace;font-size:11px;color:#1565c0;white-space:nowrap;">' + ns + '</td>'
+      + '<td style="padding:7px 10px;font-size:11px;">' + tOrdemLabel(r) + ' ' + tipo + '</td>'
+      + '<td style="padding:7px 10px;font-size:11px;font-family:monospace;color:#1565c0;white-space:nowrap;">' + cod + '</td>'
+      + '<td style="padding:7px 10px;font-size:12px;font-weight:600;">' + cliente + '</td>'
+      + '<td style="padding:7px 10px;font-size:11px;color:#2a3a50;">' + end + gps + '</td>'
+      + '<td style="padding:7px 10px;font-size:11px;white-space:nowrap;font-weight:600;">' + prazo + '</td>'
+      + '<td style="padding:7px 10px;font-size:11px;color:#8097b8;">' + muni + '</td>'
+      + '</tr>';
+  });
+
+  document.getElementById('pg-modal-body').innerHTML = html ||
+    '<tr><td colspan="7" style="padding:20px;text-align:center;color:#8097b8;">Nenhuma OS encontrada</td></tr>';
 }
 
 function pgRenderTabela() {
