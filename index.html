@@ -393,6 +393,29 @@
     <div class="badge">XLSX — Aba TdC</div>
   </div>
 
+  <!-- Modal de região -->
+  <div id="modal-regiao" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9998;display:none;align-items:center;justify-content:center;">
+    <div style="background:#fff;border-radius:18px;padding:28px;max-width:380px;width:90%;box-shadow:0 8px 40px rgba(0,0,0,.2);">
+      <div style="font-size:20px;margin-bottom:4px;">📂 Arquivo carregado!</div>
+      <div style="font-size:14px;color:#8097b8;margin-bottom:20px;" id="modal-filename"></div>
+      <div style="font-size:14px;font-weight:700;color:#1a2535;margin-bottom:12px;">Essa base é de qual região?</div>
+      <div style="display:flex;gap:10px;">
+        <button onclick="confirmarRegiao('Sul')"
+          style="flex:1;padding:14px;background:linear-gradient(135deg,#0d1b2a,#243b55);color:#e8a020;border:none;border-radius:12px;font-size:15px;font-weight:800;cursor:pointer;">
+          🌍 Sul
+        </button>
+        <button onclick="confirmarRegiao('CentroSul')"
+          style="flex:1;padding:14px;background:linear-gradient(135deg,#1a0d2a,#3b2455);color:#c8a0e8;border:none;border-radius:12px;font-size:15px;font-weight:800;cursor:pointer;">
+          🌎 Centro Sul
+        </button>
+      </div>
+      <button onclick="confirmarRegiao('')"
+        style="width:100%;margin-top:10px;padding:10px;background:transparent;border:1.5px solid #e4e8ef;border-radius:10px;font-size:13px;color:#8097b8;cursor:pointer;">
+        Sem região (só usar localmente)
+      </button>
+    </div>
+  </div>
+
   <!-- Cloud panel -->
   <div id="cloud-panel" style="margin-bottom:16px;">
     <div style="background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 2px 16px rgba(13,27,42,.08);">
@@ -514,6 +537,8 @@ let allData = [];
 let fileName = '';
 let hoje;
 const SB_URL = 'https://wlbhxogcjpcdzsxedqlp.supabase.co';
+let regiaoAtual = '';
+let pendingData = null;
 const SB_KEY = 'bPsnvUMvVQuqOmbM';
 
 // ══ SETUP ══
@@ -553,9 +578,10 @@ function processFile(file) {
         const ws = wb.Sheets[sheetName];
         const raw = XLSX.utils.sheet_to_json(ws, { defval: '' });
         if (!raw.length) throw new Error('Aba TdC vazia ou não encontrada');
-        allData = raw;
-        setupUI();
-        showToast('✔ ' + raw.length + ' registros carregados');
+        pendingData = raw;
+        // Mostrar modal de região
+        document.getElementById('modal-filename').textContent = fileName + ' — ' + raw.length + ' registros';
+        document.getElementById('modal-regiao').style.display = 'flex';
       } catch (err) {
         showToast('Erro: ' + err.message, 4000);
         console.error(err);
@@ -1279,6 +1305,23 @@ ${bodyContent}
   showToast(`✔ ${keys.length} capas baixadas`);
 }
 
+// ══ REGIÃO ══
+function confirmarRegiao(regiao) {
+  document.getElementById('modal-regiao').style.display = 'none';
+  regiaoAtual = regiao;
+  allData = pendingData;
+  pendingData = null;
+  setupUI();
+  showToast('✔ ' + allData.length + ' registros carregados' + (regiao ? ' — ' + regiao : ''));
+  // Destacar botão da região
+  document.getElementById('btn-cloud-sul').classList.toggle('ativo', regiao === 'Sul');
+  document.getElementById('btn-cloud-cs').classList.toggle('ativo', regiao === 'CentroSul');
+  // Atualizar botões de publicar no header
+  if (regiao) {
+    showToast('✔ ' + allData.length + ' registros — clique em ☁ ' + (regiao === 'Sul' ? 'Sul' : 'C.Sul') + ' pra publicar', 4000);
+  }
+}
+
 // ══ SUPABASE ══
 async function sbFetch(method, body) {
   const res = await fetch(SB_URL + '/rest/v1/snapshots', {
@@ -1315,6 +1358,8 @@ async function checarTimestamps() {
 }
 
 async function publicarNuvem(regiao) {
+  regiao = regiao || regiaoAtual;
+  if (!regiao) { showToast('Selecione uma região primeiro'); return; }
   if (!allData.length) { showToast('Carregue um arquivo primeiro'); return; }
   showToast('⏳ Publicando ' + regiao + '...');
   try {
