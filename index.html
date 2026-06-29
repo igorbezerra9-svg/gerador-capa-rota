@@ -635,7 +635,10 @@
         <div style="color:#fff;font-size:15px;font-weight:700;" id="pg-modal-title">Detalhes das OS</div>
         <div style="color:#8097b8;font-size:11px;margin-top:2px;" id="pg-modal-sub"></div>
       </div>
-      <button onclick="pgFecharModal()" style="background:transparent;border:1px solid #8097b8;color:#8097b8;border-radius:8px;padding:6px 14px;font-size:12px;cursor:pointer;">✕ Fechar</button>
+      <div style="display:flex;gap:8px;">
+        <button onclick="pgCopiarModal()" id="btn-copiar-modal" style="background:transparent;border:1px solid #8097b8;color:#8097b8;border-radius:8px;padding:6px 14px;font-size:12px;cursor:pointer;" title="Copiar lista">📋 Copiar</button>
+        <button onclick="pgFecharModal()" style="background:transparent;border:1px solid #8097b8;color:#8097b8;border-radius:8px;padding:6px 14px;font-size:12px;cursor:pointer;">✕ Fechar</button>
+      </div>
     </div>
     <div style="padding:16px;max-height:70vh;overflow-y:auto;">
       <input type="text" id="pg-modal-search" placeholder="Buscar por OS, cliente, endereço..." oninput="pgFiltrarModal()"
@@ -1631,6 +1634,56 @@ function pgRenderEquipesCriticas(dados) {
 
 let pgModalDados = [];
 
+function pgAbrirModalEquipe(codEquipe, prioFiltro) {
+  const dados = pgGetFiltrado().filter(r => (r['Código Equipe']||'') === codEquipe);
+  const filtrado = prioFiltro ? dados.filter(r => getPrioridade(r) === prioFiltro) : dados;
+  const lider = dados[0] ? (dados[0]['Chefe/Responsável de Equipe']||codEquipe) : codEquipe;
+  const prioLabel = prioFiltro === 'est' ? ' · Estouradas' : prioFiltro === 'hj' ? ' · Vencem hoje' : prioFiltro === 'ok' ? ' · No prazo' : '';
+  pgModalDados = filtrado;
+  document.getElementById('pg-modal-title').textContent = codEquipe + prioLabel;
+  document.getElementById('pg-modal-sub').textContent = lider + ' · ' + filtrado.length + ' OS · ' + pgRegiao;
+  document.getElementById('pg-modal-search').value = '';
+  pgFiltrarModal();
+  document.getElementById('pg-modal').style.display = 'flex';
+}
+
+function pgCopiarModal() {
+  const q = document.getElementById('pg-modal-search').value.toLowerCase();
+  const filtrado = q
+    ? pgModalDados.filter(r =>
+        (r['Numero de Serviço']||'').toLowerCase().includes(q) ||
+        (r['Nome e Sobrenome Cliente']||'').toLowerCase().includes(q) ||
+        (r['Endereço Completo']||'').toLowerCase().includes(q) ||
+        (r['Código Equipe']||'').toLowerCase().includes(q)
+      )
+    : pgModalDados;
+
+  const linhas = filtrado.map(r => {
+    const ns = r['Numero de Serviço'] || '—';
+    const tipo = (r[' Tipo de Serviço'] || r['Tipo de Serviço'] || '').trim();
+    const cod = r['Código Equipe'] || '—';
+    const cliente = r['Nome e Sobrenome Cliente'] || '—';
+    const end = r['Endereço Completo'] || '—';
+    const prazo = (r['Data Prevista Finalização Trabalhos'] || '—').replace(' 23:59','');
+    const muni = r['Município'] || '—';
+    return [ns, tipo, cod, cliente, end, prazo, muni].join('	');
+  });
+  const header = ['N. Serviço','Tipo','Equipe','Cliente','Endereço','Prazo','Município'].join('	');
+  const texto = header + '\n' + linhas.join('\n');
+
+  navigator.clipboard.writeText(texto).then(() => {
+    const btn = document.getElementById('btn-copiar-modal');
+    btn.textContent = '✔ Copiado!';
+    btn.style.color = '#50d080';
+    btn.style.borderColor = '#50d080';
+    setTimeout(() => {
+      btn.textContent = '📋 Copiar';
+      btn.style.color = '#8097b8';
+      btn.style.borderColor = '#8097b8';
+    }, 2000);
+  }).catch(() => showToast('Erro ao copiar', 2000));
+}
+
 function pgAbrirModal(tipo) {
   const dados = pgGetFiltrado();
   const labels = { est: '⚠ OS Estouradas', hj: '⏰ OS que vencem hoje', ok: '✓ OS no prazo' };
@@ -1733,14 +1786,18 @@ function pgRenderTabela() {
     const icon = tipoEq==='LB'?'🚗':tipoEq==='MM'?'🏍':'⚡';
     const bg = i%2===0?'#fff':'#f8fafc';
     const bordL = d.est>0?'border-left:3px solid #e53935':d.hj>0?'border-left:3px solid #ff9800':'border-left:3px solid #43a047';
+    const clkEst = d.est ? 'onclick="pgAbrirModalEquipe(\'' + cod + '\',\'est\')" style="cursor:pointer;text-decoration:underline dotted;"' : '';
+    const clkHj  = d.hj  ? 'onclick="pgAbrirModalEquipe(\'' + cod + '\',\'hj\')"  style="cursor:pointer;text-decoration:underline dotted;"' : '';
+    const clkOk  = d.ok  ? 'onclick="pgAbrirModalEquipe(\'' + cod + '\',\'ok\')"  style="cursor:pointer;text-decoration:underline dotted;"' : '';
+    const clkAll = 'onclick="pgAbrirModalEquipe(\'' + cod + '\',\'\')" style="cursor:pointer;text-decoration:underline dotted;"';
     html += `<tr style="background:${bg};${bordL};border-bottom:1px solid #e8edf5;">
       <td style="padding:7px 12px;font-family:monospace;font-size:11px;color:#1565c0;white-space:nowrap;">${icon} ${cod}</td>
       <td style="padding:7px 12px;font-size:12px;font-weight:600;">${d.lider}</td>
       <td style="padding:7px 12px;font-size:11px;color:#8097b8;">${tipoEq==='LB'?'Carro':tipoEq==='MM'?'Moto':'—'}</td>
-      <td style="padding:7px 12px;text-align:center;font-weight:700;color:${d.est?'#c0392b':'#ccc'};">${d.est||'—'}</td>
-      <td style="padding:7px 12px;text-align:center;font-weight:700;color:${d.hj?'#d35400':'#ccc'};">${d.hj||'—'}</td>
-      <td style="padding:7px 12px;text-align:center;color:#1a7a40;">${d.ok}</td>
-      <td style="padding:7px 12px;text-align:center;font-weight:700;">${total}</td>
+      <td style="padding:7px 12px;text-align:center;font-weight:700;color:${d.est?'#c0392b':'#ccc'};" ${clkEst}>${d.est||'—'}</td>
+      <td style="padding:7px 12px;text-align:center;font-weight:700;color:${d.hj?'#d35400':'#ccc'};" ${clkHj}>${d.hj||'—'}</td>
+      <td style="padding:7px 12px;text-align:center;color:#1a7a40;" ${clkOk}>${d.ok}</td>
+      <td style="padding:7px 12px;text-align:center;font-weight:700;" ${clkAll}>${total}</td>
       <td style="padding:7px 12px;text-align:center;color:#1565c0;">${d.reg}</td>
       <td style="padding:7px 12px;text-align:center;color:#bf360c;">${d.nreg}</td>
     </tr>`;
