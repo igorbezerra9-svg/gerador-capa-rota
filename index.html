@@ -1,0 +1,1379 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gerador de Capa de Rota — DESUL Sul</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root {
+    --navy: #0d1b2a;
+    --navy-mid: #1b2e45;
+    --navy-light: #243b55;
+    --accent: #e8a020;
+    --accent-dim: #c4861a;
+    --red: #d94040;
+    --red-soft: #fdecea;
+    --orange: #e07020;
+    --orange-soft: #fff3e8;
+    --green: #2a9d54;
+    --green-soft: #eaf7ef;
+    --white: #ffffff;
+    --gray-100: #f4f6f9;
+    --gray-200: #e4e8ef;
+    --gray-400: #98a4b8;
+    --gray-700: #3d4d60;
+    --text: #1a2535;
+    --font-head: 'Segoe UI', system-ui, sans-serif;
+    --font-body: 'Segoe UI', system-ui, sans-serif;
+    --font-mono: 'Consolas', 'Courier New', monospace;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: var(--font-body);
+    background: var(--gray-100);
+    color: var(--text);
+    min-height: 100vh;
+  }
+
+  /* ══ TELA INICIAL ══ */
+  #app-header {
+    background: linear-gradient(135deg, var(--navy) 0%, var(--navy-light) 100%);
+    padding: 24px 32px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    border-bottom: 3px solid var(--accent);
+  }
+  #app-header .logo {
+    width: 42px; height: 42px;
+    background: var(--accent);
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 20px; font-weight: 900; color: var(--navy);
+    flex-shrink: 0;
+    letter-spacing: -1px;
+  }
+  #app-header h1 {
+    color: var(--white);
+    font-size: 18px;
+    font-weight: 700;
+    line-height: 1.2;
+  }
+  #app-header p {
+    color: var(--accent);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    margin-top: 2px;
+  }
+
+  #main {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 32px 24px;
+  }
+
+  /* ══ UPLOAD ZONE ══ */
+  #upload-zone {
+    background: var(--white);
+    border: 2px dashed var(--gray-200);
+    border-radius: 16px;
+    padding: 48px 32px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+  }
+  #upload-zone:hover, #upload-zone.dragover {
+    border-color: var(--accent);
+    background: #fffbf2;
+  }
+  #upload-zone input[type=file] {
+    position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
+  }
+  #upload-zone .icon { font-size: 48px; margin-bottom: 12px; }
+  #upload-zone h2 { font-size: 18px; color: var(--text); margin-bottom: 6px; }
+  #upload-zone p { font-size: 13px; color: var(--gray-400); }
+  #upload-zone .badge {
+    display: inline-block;
+    background: var(--navy);
+    color: var(--white);
+    font-size: 11px;
+    font-weight: 700;
+    padding: 3px 10px;
+    border-radius: 20px;
+    margin-top: 10px;
+    letter-spacing: 0.5px;
+  }
+
+  /* ══ PAINEL DE CONTROLE ══ */
+  #control-panel {
+    display: none;
+    background: var(--white);
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 2px 16px rgba(13,27,42,.08);
+  }
+  #control-panel .cp-header {
+    background: var(--navy-mid);
+    padding: 16px 24px;
+    display: flex; align-items: center; gap: 12px;
+  }
+  #control-panel .cp-header .file-info { flex: 1; }
+  #control-panel .cp-header .file-name {
+    color: var(--white); font-size: 14px; font-weight: 600;
+  }
+  #control-panel .cp-header .file-stats {
+    color: var(--accent); font-size: 12px; margin-top: 2px;
+  }
+  #cp-change { background: transparent; border: 1px solid var(--gray-400); color: var(--gray-400); padding: 6px 14px; border-radius: 6px; font-size: 12px; cursor: pointer; }
+  #cp-change:hover { border-color: var(--white); color: var(--white); }
+
+  .cp-body { padding: 24px; }
+
+  .cp-row { display: flex; gap: 16px; margin-bottom: 20px; flex-wrap: wrap; }
+  .cp-group { flex: 1; min-width: 200px; }
+  .cp-group label {
+    display: block; font-size: 11px; font-weight: 700; color: var(--gray-400);
+    text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px;
+  }
+  .cp-group select, .cp-group input {
+    width: 100%; padding: 10px 12px; border: 1.5px solid var(--gray-200);
+    border-radius: 8px; font-size: 13px; color: var(--text);
+    background: var(--gray-100); font-family: var(--font-body);
+    transition: border-color 0.15s;
+    appearance: none;
+  }
+  .cp-group select:focus, .cp-group input:focus {
+    outline: none; border-color: var(--accent); background: var(--white);
+  }
+
+  .btn-gerar {
+    width: 100%;
+    padding: 14px;
+    background: linear-gradient(135deg, var(--navy) 0%, var(--navy-light) 100%);
+    color: var(--white);
+    border: none;
+    border-radius: 10px;
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+    letter-spacing: 0.3px;
+    transition: opacity 0.2s;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+  }
+  .btn-gerar:hover { opacity: 0.9; }
+  .btn-gerar:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  /* ══ STATUS PILLS ══ */
+  .stats-row {
+    display: flex; gap: 10px; margin-top: 20px; flex-wrap: wrap;
+  }
+  .stat-pill {
+    flex: 1; min-width: 100px;
+    border-radius: 10px; padding: 12px 16px; text-align: center;
+  }
+  .stat-pill .val { font-size: 22px; font-weight: 800; line-height: 1; }
+  .stat-pill .lbl { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; margin-top: 3px; }
+  .pill-red { background: var(--red-soft); color: var(--red); }
+  .pill-orange { background: var(--orange-soft); color: var(--orange); }
+  .pill-green { background: var(--green-soft); color: var(--green); }
+  .pill-blue { background: #eef3fb; color: #3060b0; }
+
+  /* ══ LISTA DE EQUIPES GERADAS ══ */
+  #result-section { display: none; margin-top: 28px; }
+  #result-section h3 {
+    font-size: 13px; font-weight: 700; color: var(--gray-400);
+    text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px;
+  }
+  .equipe-card {
+    background: var(--white); border-radius: 12px; padding: 16px 20px;
+    display: flex; align-items: center; gap: 16px;
+    margin-bottom: 8px;
+    box-shadow: 0 1px 6px rgba(0,0,0,.05);
+  }
+  .equipe-card .eq-code {
+    font-family: var(--font-mono);
+    background: var(--navy);
+    color: var(--accent);
+    padding: 4px 10px; border-radius: 6px;
+    font-size: 12px; font-weight: 700;
+    white-space: nowrap;
+  }
+  .equipe-card .eq-info { flex: 1; }
+  .equipe-card .eq-lider { font-size: 13px; font-weight: 600; color: var(--text); }
+  .equipe-card .eq-muni { font-size: 11px; color: var(--gray-400); margin-top: 2px; }
+  .equipe-card .eq-count { text-align: right; }
+  .equipe-card .eq-count .num { font-size: 20px; font-weight: 800; color: var(--navy); }
+  .equipe-card .eq-count .lbl { font-size: 10px; color: var(--gray-400); }
+
+  .btn-download-equipe {
+    padding: 7px 16px; background: var(--accent); color: var(--navy);
+    border: none; border-radius: 7px; font-size: 12px; font-weight: 700;
+    cursor: pointer; transition: background 0.15s; white-space: nowrap;
+  }
+  .btn-download-equipe:hover { background: var(--accent-dim); }
+
+  .btn-pdf-equipe {
+    padding: 7px 14px; background: var(--red); color: var(--white);
+    border: none; border-radius: 7px; font-size: 12px; font-weight: 700;
+    cursor: pointer; transition: opacity 0.15s; white-space: nowrap;
+  }
+  .btn-ver-equipe {
+    padding: 7px 14px; background: var(--navy-mid); color: var(--white);
+    border: 1px solid var(--navy-light); border-radius: 7px; font-size: 12px; font-weight: 700;
+    cursor: pointer; transition: background 0.15s; white-space: nowrap;
+  }
+  .btn-ver-equipe:hover { background: var(--navy-light); }
+  .btn-pdf-equipe:hover { opacity: 0.85; }
+  .eq-actions { display: flex; gap: 6px; }
+
+  .btn-download-all {
+    width: 100%; padding: 13px; background: var(--accent);
+    color: var(--navy); border: none; border-radius: 10px;
+    font-size: 14px; font-weight: 700; cursor: pointer;
+    margin-top: 16px; transition: background 0.15s;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+  }
+  .btn-download-all:hover { background: var(--accent-dim); }
+
+  /* ══ CAPA DE ROTA (template imprimível) ══ */
+  .capa-rota-doc {
+    font-family: 'Segoe UI', Arial, sans-serif;
+    color: #1a2535;
+    background: #fff;
+    padding: 0;
+    width: 100%;
+  }
+
+  .cr-header {
+    background: linear-gradient(135deg, #0d1b2a 0%, #243b55 100%);
+    padding: 20px 24px 16px;
+    border-bottom: 4px solid #e8a020;
+  }
+  .cr-header .cr-top {
+    display: flex; align-items: flex-start; justify-content: space-between;
+  }
+  .cr-logo {
+    font-size: 11px; font-weight: 800; color: #e8a020;
+    text-transform: uppercase; letter-spacing: 2px;
+    border-left: 3px solid #e8a020; padding-left: 8px;
+    line-height: 1.4;
+  }
+  .cr-logo span { display: block; color: #8097b8; font-weight: 400; letter-spacing: 1px; font-size: 10px; }
+  .cr-data-rota {
+    text-align: right;
+    color: #8097b8; font-size: 11px; line-height: 1.6;
+  }
+  .cr-data-rota strong { color: #e8a020; display: block; font-size: 13px; }
+
+  .cr-equipe-block {
+    margin-top: 14px; display: flex; gap: 28px; flex-wrap: wrap;
+  }
+  .cr-field { }
+  .cr-field .lbl { font-size: 9px; color: #8097b8; text-transform: uppercase; letter-spacing: 1.5px; font-weight: 700; }
+  .cr-field .val { font-size: 15px; color: #fff; font-weight: 700; margin-top: 2px; line-height: 1.2; }
+  .cr-field .val.small { font-size: 12px; }
+
+  .cr-kpis {
+    display: flex; gap: 0; border-top: 1px solid rgba(255,255,255,.1); margin-top: 14px;
+  }
+  .cr-kpi {
+    flex: 1; text-align: center; padding: 10px 8px;
+    border-right: 1px solid rgba(255,255,255,.1);
+  }
+  .cr-kpi:last-child { border-right: none; }
+  .cr-kpi .kv { font-size: 20px; font-weight: 800; }
+  .cr-kpi .kl { font-size: 9px; text-transform: uppercase; letter-spacing: 1px; margin-top: 1px; }
+  .cr-kpi.kpi-red .kv { color: #f06060; }
+  .cr-kpi.kpi-red .kl { color: #c04040; }
+  .cr-kpi.kpi-orange .kv { color: #f0a040; }
+  .cr-kpi.kpi-orange .kl { color: #c07020; }
+  .cr-kpi.kpi-green .kv { color: #50d080; }
+  .cr-kpi.kpi-green .kl { color: #30a060; }
+  .cr-kpi.kpi-blue .kv { color: #80c0ff; }
+  .cr-kpi.kpi-blue .kl { color: #5090d0; }
+
+  /* Tabela */
+  .cr-table-wrapper { padding: 16px; }
+  .cr-table {
+    width: 100%; border-collapse: collapse; font-size: 11px;
+  }
+  .cr-table thead tr {
+    background: #0d1b2a; color: #fff;
+  }
+  .cr-table thead th {
+    padding: 8px 10px; text-align: left; font-size: 9.5px;
+    text-transform: uppercase; letter-spacing: 1px; font-weight: 700;
+    border-right: 1px solid #243b55;
+  }
+  .cr-table thead th:last-child { border-right: none; }
+  .cr-table tbody tr { border-bottom: 1px solid #e8edf5; }
+  .cr-table tbody tr:nth-child(even) { background: #f8fafc; }
+  .cr-table tbody td {
+    padding: 7px 10px; vertical-align: top; font-size: 10.5px; color: #2a3a50;
+  }
+
+  /* priority badges */
+  .badge-est {
+    display: inline-block;
+    background: #fdecea; color: #c03030; border: 1px solid #f0b0b0;
+    border-radius: 4px; padding: 1px 6px; font-size: 9px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.5px;
+  }
+  .badge-hj {
+    display: inline-block;
+    background: #fff3e8; color: #c05010; border: 1px solid #f0c080;
+    border-radius: 4px; padding: 1px 6px; font-size: 9px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.5px;
+  }
+  .badge-ok {
+    display: inline-block;
+    background: #eaf7ef; color: #1a7a40; border: 1px solid #90d0aa;
+    border-radius: 4px; padding: 1px 6px; font-size: 9px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.5px;
+  }
+  .os-num { font-family: 'Consolas', monospace; font-size: 10px; color: #3060b0; font-weight: 600; }
+  .cr-footer {
+    background: #f4f6f9; border-top: 2px solid #e8a020;
+    padding: 8px 16px; display: flex; justify-content: space-between; align-items: center;
+    font-size: 9px; color: #8097b8;
+  }
+  .cr-footer strong { color: #1a2535; }
+
+  .btn-cloud {
+    flex:1; min-width:160px;
+    background:var(--gray-100); border:1.5px solid var(--gray-200);
+    border-radius:12px; padding:12px 16px;
+    display:flex; align-items:center; gap:12px;
+    cursor:pointer; transition:all 0.15s; text-align:left;
+  }
+  .btn-cloud:hover { border-color:var(--accent); background:#fffbf2; }
+  .btn-cloud.ativo { border-color:var(--accent); background:#fffbf2; }
+
+  /* publish buttons */
+  .btn-publish {
+    padding:8px 16px; border:none; border-radius:8px;
+    font-size:12px; font-weight:700; cursor:pointer;
+    background:var(--navy); color:var(--accent);
+    transition:opacity 0.15s;
+  }
+  .btn-publish:hover { opacity:0.85; }
+
+  #toast {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+    background: var(--navy); color: var(--white);
+    padding: 10px 20px; border-radius: 20px; font-size: 13px; font-weight: 600;
+    display: none; z-index: 9999; box-shadow: 0 4px 20px rgba(0,0,0,.3);
+  }
+</style>
+</head>
+<body>
+
+<div id="app-header">
+  <div class="logo">DS</div>
+  <div>
+    <h1>Gerador de Capa de Rota</h1>
+    <p>DESUL Sul — Grupo Cosampa</p>
+  </div>
+</div>
+
+<div id="main">
+
+  <!-- Upload -->
+  <div id="upload-zone">
+    <input type="file" id="file-input" accept=".xlsx,.xlsm">
+    <div class="icon">📁</div>
+    <h2>Arraste o relatório CDU aqui</h2>
+    <p>ou clique para selecionar o arquivo</p>
+    <div class="badge">XLSX — Aba TdC</div>
+  </div>
+
+  <!-- Cloud panel -->
+  <div id="cloud-panel" style="margin-bottom:16px;">
+    <div style="background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 2px 16px rgba(13,27,42,.08);">
+      <div style="background:linear-gradient(135deg,#0d1b2a,#243b55);padding:14px 20px;display:flex;align-items:center;gap:10px;border-bottom:2px solid var(--accent);">
+        <span style="font-size:18px;">☁</span>
+        <div>
+          <div style="color:#fff;font-size:13px;font-weight:700;">Dados na Nuvem</div>
+          <div style="color:#8097b8;font-size:11px;">Carregue sem precisar subir o Excel</div>
+        </div>
+      </div>
+      <div style="padding:16px;display:flex;gap:10px;flex-wrap:wrap;">
+        <button class="btn-cloud" onclick="carregarNuvem('Sul')" id="btn-cloud-sul">
+          <span style="font-size:16px;">🌍</span>
+          <div>
+            <div style="font-weight:700;font-size:13px;">Sul</div>
+            <div id="ts-sul" style="font-size:10px;color:#8097b8;margin-top:1px;">verificando...</div>
+          </div>
+        </button>
+        <button class="btn-cloud" onclick="carregarNuvem('CentroSul')" id="btn-cloud-cs">
+          <span style="font-size:16px;">🌎</span>
+          <div>
+            <div style="font-weight:700;font-size:13px;">Centro Sul</div>
+            <div id="ts-cs" style="font-size:10px;color:#8097b8;margin-top:1px;">verificando...</div>
+          </div>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Painel de controle -->
+  <div id="control-panel">
+    <div class="cp-header">
+      <div class="file-info">
+        <div class="file-name" id="cp-filename">—</div>
+        <div class="file-stats" id="cp-stats">—</div>
+      </div>
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+        <span style="color:#8097b8;font-size:11px;">Publicar:</span>
+        <button class="btn-publish" onclick="publicarNuvem('Sul')">☁ Sul</button>
+        <button class="btn-publish" onclick="publicarNuvem('CentroSul')">☁ C.Sul</button>
+        <button id="cp-change" onclick="resetApp()">Trocar arquivo</button>
+      </div>
+    </div>
+    <div class="cp-body">
+      <div class="cp-row">
+        <div class="cp-group">
+          <label>Centro de Serviço</label>
+          <select id="sel-cs" onchange="atualizarEquipes()">
+            <option value="">Todos</option>
+          </select>
+        </div>
+        <div class="cp-group">
+          <label>Equipe</label>
+          <select id="sel-equipe">
+            <option value="__todas__">Gerar para TODAS as equipes</option>
+          </select>
+        </div>
+        <div class="cp-group">
+          <label>Tipo de Equipe</label>
+          <select id="sel-tipo-equipe" onchange="atualizarEquipes()">
+            <option value="">Todas</option>
+            <option value="LB">🚗 Comercial Carro (LB)</option>
+            <option value="MM">🏍 Comercial Moto (MM)</option>
+          </select>
+        </div>
+        <div class="cp-group">
+          <label>Estado TdC</label>
+          <select id="sel-estado">
+            <option value="">Todos</option>
+            <option value="Enviado ao Campo" selected>Enviado ao Campo</option>
+            <option value="Em execução">Em execução</option>
+            <option value="Designado">Designado</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="stats-row" id="stats-row" style="display:none">
+        <div class="stat-pill pill-red">
+          <div class="val" id="count-est">0</div>
+          <div class="lbl">Estouradas</div>
+        </div>
+        <div class="stat-pill pill-orange">
+          <div class="val" id="count-hj">0</div>
+          <div class="lbl">Vencem hoje</div>
+        </div>
+        <div class="stat-pill pill-green">
+          <div class="val" id="count-ok">0</div>
+          <div class="lbl">No prazo</div>
+        </div>
+        <div class="stat-pill pill-blue">
+          <div class="val" id="count-total">0</div>
+          <div class="lbl">Total filtrado</div>
+        </div>
+      </div>
+
+      <div style="margin-top:20px">
+        <button class="btn-gerar" id="btn-gerar" onclick="gerarCapas()">
+          ⚡ Gerar Capas de Rota
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Resultado -->
+  <div id="result-section">
+    <h3 id="result-title">Capas geradas</h3>
+    <div id="equipes-list"></div>
+    <button class="btn-download-all" id="btn-all" onclick="downloadTodas()">
+      ⬇ Baixar Todas as Capas em um único HTML
+    </button>
+  </div>
+
+</div>
+
+<div id="toast"></div>
+
+<script>
+let allData = [];
+let fileName = '';
+let hoje;
+const SB_URL = 'https://wlbhxogcjpcdzsxedqlp.supabase.co';
+const SB_KEY = 'bPsnvUMvVQuqOmbM';
+
+// ══ SETUP ══
+function getHoje() {
+  const d = new Date();
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
+hoje = getHoje();
+
+// ══ DRAG & DROP ══
+const zone = document.getElementById('upload-zone');
+const fileInput = document.getElementById('file-input');
+
+zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('dragover'); });
+zone.addEventListener('dragleave', () => zone.classList.remove('dragover'));
+zone.addEventListener('drop', e => {
+  e.preventDefault(); zone.classList.remove('dragover');
+  const f = e.dataTransfer.files[0];
+  if (f) processFile(f);
+});
+fileInput.addEventListener('change', e => {
+  if (e.target.files[0]) processFile(e.target.files[0]);
+});
+
+// ══ PROCESSAR ARQUIVO ══
+function processFile(file) {
+  fileName = file.name;
+  showToast('📂 Lendo arquivo...');
+  const reader = new FileReader();
+  reader.onload = e => {
+    // Usar setTimeout pra não travar a UI enquanto processa
+    setTimeout(() => {
+      try {
+        showToast('⚙ Processando planilha...');
+        const wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array', cellDates: false, dense: true });
+        const sheetName = wb.SheetNames.find(n => n.trim().toLowerCase() === 'tdc') || wb.SheetNames[0];
+        const ws = wb.Sheets[sheetName];
+        const raw = XLSX.utils.sheet_to_json(ws, { defval: '' });
+        if (!raw.length) throw new Error('Aba TdC vazia ou não encontrada');
+        allData = raw;
+        setupUI();
+        showToast('✔ ' + raw.length + ' registros carregados');
+      } catch (err) {
+        showToast('Erro: ' + err.message, 4000);
+        console.error(err);
+      }
+    }, 50);
+  };
+  reader.onerror = () => showToast('Erro ao ler o arquivo', 4000);
+  reader.readAsArrayBuffer(file);
+}
+
+function setupUI() {
+  document.getElementById('upload-zone').style.display = 'none';
+  document.getElementById('control-panel').style.display = 'block';
+  document.getElementById('cp-filename').textContent = fileName;
+
+  // Centros de serviço (prefixo do código equipe)
+  const csSet = new Set();
+  allData.forEach(r => {
+    const cod = r['Código Equipe'] || '';
+    if (cod) {
+      // Mapear prefixos
+      if (cod.startsWith('JZ')) csSet.add('Juazeiro do Norte (JZ)');
+      else if (cod.startsWith('ML')) csSet.add('Milagres (ML)');
+      else if (cod.startsWith('CP')) csSet.add('Campos Sales (CP)');
+      else csSet.add('Outros');
+    }
+  });
+  const selCS = document.getElementById('sel-cs');
+  selCS.innerHTML = '<option value="">Todos</option>';
+  [...csSet].sort().forEach(cs => {
+    selCS.innerHTML += `<option value="${cs}">${cs}</option>`;
+  });
+
+  atualizarEquipes();
+}
+
+function getTipoEquipe(cod) {
+  if (!cod) return '';
+  if (/-LB-/.test(cod)) return 'LB';
+  if (/-MM-/.test(cod)) return 'MM';
+  return '';
+}
+
+function atualizarEquipes() {
+  const cs = document.getElementById('sel-cs').value;
+  const estado = document.getElementById('sel-estado').value;
+  const tipo = document.getElementById('sel-tipo-equipe')?.value || '';
+  const selEq = document.getElementById('sel-equipe');
+  selEq.innerHTML = '<option value="__todas__">Gerar para TODAS as equipes</option>';
+
+  const eqMap = {};
+  allData.forEach(r => {
+    const cod = r['Código Equipe'] || '';
+    if (!cod) return;
+    if (cs) {
+      const pref = cs.split(' (')[1]?.replace(')','') || '';
+      if (!cod.startsWith(pref)) return;
+    }
+    if (tipo && getTipoEquipe(cod) !== tipo) return;
+    if (estado && (r['Estado TdC'] || '').trim() !== estado) return;
+    if (!eqMap[cod]) eqMap[cod] = r['Chefe/Responsável de Equipe'] || '';
+    else if (!eqMap[cod] && r['Chefe/Responsável de Equipe']) eqMap[cod] = r['Chefe/Responsável de Equipe'];
+  });
+
+  Object.keys(eqMap).sort().forEach(cod => {
+    const lider = formatNome(eqMap[cod]);
+    selEq.innerHTML += `<option value="${cod}">${cod} — ${lider}</option>`;
+  });
+
+  atualizarStats();
+}
+
+document.getElementById('sel-estado').addEventListener('change', () => { atualizarEquipes(); });
+document.getElementById('sel-equipe').addEventListener('change', atualizarStats);
+
+function atualizarStats() {
+  const filtered = getFiltered();
+  if (!filtered.length) { document.getElementById('stats-row').style.display = 'none'; return; }
+  document.getElementById('stats-row').style.display = 'flex';
+
+  let est=0, hj=0, ok=0;
+  filtered.forEach(r => {
+    const p = getPrioridade(r);
+    if (p === 'est') est++;
+    else if (p === 'hj') hj++;
+    else ok++;
+  });
+  document.getElementById('count-est').textContent = est;
+  document.getElementById('count-hj').textContent = hj;
+  document.getElementById('count-ok').textContent = ok;
+  document.getElementById('count-total').textContent = filtered.length;
+  document.getElementById('cp-stats').textContent = `${allData.length} registros no arquivo`;
+}
+
+function getFiltered() {
+  const cs = document.getElementById('sel-cs').value;
+  const eq = document.getElementById('sel-equipe').value;
+  const estado = document.getElementById('sel-estado').value;
+  const tipo = document.getElementById('sel-tipo-equipe')?.value || '';
+
+  const EXCLUIR_ESTADOS = ['programáveis', 'a reprogramar'];
+  return allData.filter(r => {
+    const estadoR = (r['Estado TdC'] || '').trim().toLowerCase();
+    if (EXCLUIR_ESTADOS.includes(estadoR)) return false;
+    const cod = r['Código Equipe'] || '';
+    if (cs) {
+      const pref = cs.split(' (')[1]?.replace(')','') || '';
+      if (!cod.startsWith(pref)) return false;
+    }
+    if (tipo && getTipoEquipe(cod) !== tipo) return false;
+    if (eq && eq !== '__todas__' && cod !== eq) return false;
+    if (estado && (r['Estado TdC'] || '').trim() !== estado) return false;
+    return true;
+  });
+}
+
+// ══ MAPA DE TIPOS ══
+const TIPO_REGULADA = {
+  'OUTMML':true,'OUTMGD':true,'OUTVPC':true,'OUTIRD':true,'OUTTCP':true,
+  'OUTNCU':true,'OUTAMC':true,'OUTSEM':true,'OUTIRM':true,'NOVLBT':true,
+  'OUTAQM':true,'OUTSDJ':true,'OUTSRL':true,'OUTTME':true,'OUTNCR':true,
+  'OUTDCM':true,'OUTACT':true,'OUTIMB':true,'OUTRAR':true,'OUTRNR':true,
+  'OUTRNU':true,'OUTRIM':true,'OUTRAU':true,'OUTCP0':true,'OUTRNL':true,
+  'OUTVMT':true,'NOVPRO':true,'OUTOTC':true,'OUTIMR':true,'OUTSTB':true,
+  'OUTIRC':true,'OUTMLD':true,'OUTMMI':true
+};
+const TIPO_NAO_REGULADA = {
+  'OUTCDN':true,'OUTRNN':true,'OUTERM':true,'OUTRFS':true,'OUTCSC':true,
+  'OUTCRT':true
+};
+
+function getTipoOrdem(r) {
+  const t = (r[' Tipo de Serviço'] || r['Tipo de Serviço'] || '').trim().toUpperCase();
+  const cod = t.split(' ')[0].split('-')[0]; // pega só o código ex: OUTCDN
+  if (TIPO_REGULADA[cod]) return 'REG';
+  if (TIPO_NAO_REGULADA[cod]) return 'NREG';
+  return 'OUTRO';
+}
+
+function getTipoOrdemOrder(r) {
+  const t = getTipoOrdem(r);
+  if (t === 'REG') return 0;
+  if (t === 'NREG') return 1;
+  return 2;
+}
+
+// ══ PRIORIDADE ══
+function parseDateTimeStr(str) {
+  // "18/06/2026 23:59" → Date com hora
+  if (!str) return null;
+  const m = String(str).match(/(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2})/);
+  if (!m) {
+    // só data sem hora
+    const d = String(str).match(/(\d{2})\/(\d{2})\/(\d{4})/);
+    if (!d) return null;
+    return new Date(+d[3], +d[2]-1, +d[1], 23, 59);
+  }
+  return new Date(+m[3], +m[2]-1, +m[1], +m[4], +m[5]);
+}
+
+function parseDateStr(str) {
+  if (!str) return null;
+  const m = String(str).match(/(\d{2})\/(\d{2})\/(\d{4})/);
+  if (!m) return null;
+  return new Date(+m[3], +m[2]-1, +m[1]);
+}
+
+function getPrioridade(r) {
+  const dateStr = r['Data Prevista Finalização Trabalhos'] || '';
+  const dt = parseDateTimeStr(dateStr);
+  if (!dt) return 'ok';
+
+  const agora = new Date();
+
+  // Vencida: prazo já passou
+  if (dt < agora) return 'est';
+
+  // "Vencendo Hoje": vence até 09:00 do dia seguinte
+  const amanha9h = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate() + 1, 9, 0, 0);
+  if (dt <= amanha9h) return 'hj';
+
+  return 'ok';
+}
+
+function getPrioridadeLabel(r) {
+  const p = getPrioridade(r);
+  if (p === 'est') return '<span class="badge-est">Estourada</span>';
+  if (p === 'hj') return '<span class="badge-hj">Vence Hoje</span>';
+  return '<span class="badge-ok">No Prazo</span>';
+}
+
+// Ordem de sort: 1º tipo (REG < NREG < OUTRO), 2º prioridade (est < hj < ok), 3º data
+function getPrioOrder(r) {
+  const p = getPrioridade(r);
+  if (p === 'est') return 0;
+  if (p === 'hj') return 1;
+  return 2;
+}
+
+// ══ FORMATAR NOME (inverter sobrenome) ══
+function formatNome(nome) {
+  if (!nome) return '—';
+  // Normalize: some names are SOBRENOME NOME format
+  const parts = nome.trim().split(' ');
+  if (parts.length <= 2) return nome.trim();
+  return nome.trim();
+}
+
+// ══ GERAR CAPAS ══
+let capasGeradas = {};
+
+function gerarCapas() {
+  capasGeradas = {};
+  const filtered = getFiltered();
+  if (!filtered.length) { showToast('Nenhum registro encontrado com esse filtro.'); return; }
+
+  // Agrupar por equipe
+  const eqGroups = {};
+  filtered.forEach(r => {
+    const cod = r['Código Equipe'] || 'SEM_EQUIPE';
+    if (!eqGroups[cod]) eqGroups[cod] = [];
+    eqGroups[cod].push(r);
+  });
+
+  const list = document.getElementById('equipes-list');
+  list.innerHTML = '';
+
+  const dataHoje = hoje.toLocaleDateString('pt-BR');
+
+  Object.keys(eqGroups).sort().forEach(cod => {
+    const rows = eqGroups[cod];
+    // Sort: 1º Reguladas → Não Reguladas → Outros
+    //        2º Estourada → Vence Hoje → No Prazo
+    //        3º Dentro do mesmo grupo/prazo: Rota de Leitura decrescente (7 primeiros dígitos)
+    rows.sort((a, b) => {
+      const ta = getTipoOrdemOrder(a), tb = getTipoOrdemOrder(b);
+      if (ta !== tb) return ta - tb;
+
+      const pa = getPrioOrder(a), pb = getPrioOrder(b);
+      if (pa !== pb) return pa - pb;
+
+      // Mesma prioridade → ordenar por data crescente primeiro
+      const da = parseDateTimeStr(a['Data Prevista Finalização Trabalhos']);
+      const db = parseDateTimeStr(b['Data Prevista Finalização Trabalhos']);
+      if (da && db && da.getTime() !== db.getTime()) return da - db;
+
+      // Mesmo vencimento → ordenar por Rota de Leitura (7 primeiros dígitos) decrescente
+      const rotaA = String(a['Rota de Leitura'] || '').replace(/\s/g, '').substring(0, 7);
+      const rotaB = String(b['Rota de Leitura'] || '').replace(/\s/g, '').substring(0, 7);
+      if (rotaA && rotaB) return rotaB.localeCompare(rotaA);
+      if (rotaA) return -1;
+      if (rotaB) return 1;
+      return 0;
+    });
+
+    const lider = formatNome(rows[0]['Chefe/Responsável de Equipe'] || '');
+    const munis = [...new Set(rows.map(r => r['Município'] || '').filter(Boolean))].slice(0,3).join(', ');
+    const est = rows.filter(r => getPrioridade(r) === 'est').length;
+    const hj = rows.filter(r => getPrioridade(r) === 'hj').length;
+    const ok = rows.filter(r => getPrioridade(r) === 'ok').length;
+
+    // Card na lista
+    const tipoEq = getTipoEquipe(cod);
+    const tipoIcon = tipoEq === 'LB' ? '🚗' : tipoEq === 'MM' ? '🏍' : '';
+    const card = document.createElement('div');
+    card.className = 'equipe-card';
+    card.innerHTML = `
+      <div class="eq-code">${cod}</div>
+      <div class="eq-info">
+        <div class="eq-lider">${tipoIcon ? `<span style="margin-right:5px">${tipoIcon}</span>` : ""}${lider}</div>
+        <div class="eq-muni">${munis || '—'}</div>
+        <div style="margin-top:6px;display:flex;gap:8px;flex-wrap:wrap">
+          ${est ? `<span class="badge-est">${est} est.</span>` : ''}
+          ${hj ? `<span class="badge-hj">${hj} hoje</span>` : ''}
+          ${ok ? `<span class="badge-ok">${ok} ok</span>` : ''}
+        </div>
+      </div>
+      <div class="eq-count">
+        <div class="num">${rows.length}</div>
+        <div class="lbl">serviços</div>
+      </div>
+      <div class="eq-actions" style="flex-wrap:wrap;">
+        <button class="btn-ver-equipe" onclick="verEquipe('${cod}','cards')" title="Cards">👁 Cards</button>
+        <button class="btn-ver-equipe" onclick="verEquipe('${cod}','lista')" title="Lista" style="background:var(--navy-light);">☰ Lista</button>
+        <button class="btn-download-equipe" onclick="downloadEquipe('${cod}','cards')">⬇ Cards</button>
+        <button class="btn-download-equipe" onclick="downloadEquipe('${cod}','lista')" style="background:var(--navy);color:#fff;">⬇ Lista</button>
+        <button class="btn-pdf-equipe" onclick="imprimirEquipe('${cod}')">📄 PDF</button>
+      </div>
+    `;
+    list.appendChild(card);
+
+    // Gerar HTML das duas versões
+    capasGeradas[cod] = {
+      cards: gerarHTMLCapa(cod, lider, rows, dataHoje, est, hj, ok, 'cards'),
+      lista: gerarHTMLCapa(cod, lider, rows, dataHoje, est, hj, ok, 'lista')
+    };
+  });
+
+  document.getElementById('result-section').style.display = 'block';
+  document.getElementById('result-title').textContent =
+    `${Object.keys(capasGeradas).length} equipe(s) geradas`;
+  document.getElementById('result-section').scrollIntoView({ behavior: 'smooth' });
+  showToast(`✔ ${Object.keys(capasGeradas).length} capas prontas`);
+}
+
+// ══ HTML DE CAPA ══
+function gerarHTMLCapa(cod, lider, rows, dataHoje, est, hj, ok, modo) {
+  modo = modo || 'cards';
+  const tipoEq = getTipoEquipe(cod);
+  const tipoLabel = tipoEq === 'LB' ? '🚗 Comercial Carro' : tipoEq === 'MM' ? '🏍 Comercial Moto' : '⚡ Campo';
+  const tipoColor = tipoEq === 'LB' ? '#1565c0' : tipoEq === 'MM' ? '#6a1fa0' : '#0d7a4a';
+  const tipoBg = tipoEq === 'LB' ? '#e3f0ff' : tipoEq === 'MM' ? '#f3e8ff' : '#e6f7ee';
+
+  const tipoCount = {};
+  rows.forEach(r => {
+    const t = (r[' Tipo de Serviço'] || r['Tipo de Serviço'] || '').trim();
+    tipoCount[t] = (tipoCount[t] || 0) + 1;
+  });
+
+  const cards = rows.map((r, i) => {
+    const ns = r['Numero de Serviço'] || '—';
+    const tipo = (r[' Tipo de Serviço'] || r['Tipo de Serviço'] || '').trim();
+    const cliente = r['Nome e Sobrenome Cliente'] || '—';
+    const end = r['Endereço Completo'] || '—';
+    const muni = r['Município'] || '—';
+    const prazo = (r['Data Prevista Finalização Trabalhos'] || '—').replace(' 23:59','');
+    const obs = r['Dica Localização'] || '';
+    const lat = r['Latitude'] || '';
+    const lng = r['Longitude'] || '';
+    const rotaLeitura = String(r['Rota de Leitura'] || '').trim();
+    const rotaPrefix = rotaLeitura ? rotaLeitura.replace(/\s/g,'').substring(0,7) : '';
+    const p = getPrioridade(r);
+    const prioColor = p === 'est' ? '#c0392b' : p === 'hj' ? '#d35400' : '#1a7a40';
+    const prioBg = p === 'est' ? '#fdecea' : p === 'hj' ? '#fff3e8' : '#eaf7ef';
+    const prioBorder = p === 'est' ? '#e57373' : p === 'hj' ? '#ffb74d' : '#66bb6a';
+    const prioLabel = p === 'est' ? '⚠ ESTOURADA' : p === 'hj' ? '⏰ VENCE HOJE' : '✓ NO PRAZO';
+    const cardBorder = p === 'est' ? 'border-left: 4px solid #e53935;' : p === 'hj' ? 'border-left: 4px solid #ff9800;' : 'border-left: 4px solid #43a047;';
+    const tOrdem = getTipoOrdem(r);
+    const tBadge = tOrdem === 'REG'
+      ? '<span style="background:#e8f4fd;color:#1565c0;border:1px solid #90caf9;border-radius:4px;padding:1px 7px;font-size:9px;font-weight:800;letter-spacing:.5px;">REGULADA</span>'
+      : tOrdem === 'NREG'
+      ? '<span style="background:#fff3e8;color:#bf360c;border:1px solid #ffb74d;border-radius:4px;padding:1px 7px;font-size:9px;font-weight:800;letter-spacing:.5px;">NÃO REG.</span>'
+      : '<span style="background:#f3e8ff;color:#6a1fa0;border:1px solid #ce93d8;border-radius:4px;padding:1px 7px;font-size:9px;font-weight:800;letter-spacing:.5px;">OUTRO</span>';
+
+    const gpsBtn = lat && lng
+      ? `<a href="https://www.google.com/maps?q=${lat},${lng}" target="_blank"
+           style="display:inline-flex;align-items:center;gap:5px;background:#1565c0;color:#fff;text-decoration:none;
+                  padding:7px 14px;border-radius:8px;font-size:12px;font-weight:700;margin-top:10px;">
+           📍 Abrir no Maps
+         </a>`
+      : '';
+
+    const wazeBtn = lat && lng
+      ? `<a href="https://waze.com/ul?ll=${lat},${lng}&navigate=yes" target="_blank"
+           style="display:inline-flex;align-items:center;gap:5px;background:#06c0d9;color:#fff;text-decoration:none;
+                  padding:7px 14px;border-radius:8px;font-size:12px;font-weight:700;margin-top:10px;margin-left:6px;">
+           🗺 Waze
+         </a>`
+      : '';
+
+    return `
+    <div class="service-card" style="background:#fff;border-radius:14px;margin-bottom:14px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.08);${cardBorder}">
+      <!-- topo do card -->
+      <div class="service-card-top" style="padding:14px 16px 10px;display:flex;align-items:flex-start;justify-content:space-between;gap:10px;">
+        <div style="display:flex;align-items:center;gap:10px;flex:1;min-width:0;">
+          <div class="seq-num" style="background:#0d1b2a;color:#e8a020;font-family:monospace;font-weight:800;font-size:15px;
+                      border-radius:8px;width:34px;height:34px;display:flex;align-items:center;justify-content:center;
+                      flex-shrink:0;">${i+1}</div>
+          <div style="min-width:0;">
+            <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:2px;">
+              <span style="font-size:11px;color:#8097b8;font-weight:600;text-transform:uppercase;letter-spacing:.8px;">${tipo}</span>
+              ${tBadge}
+            </div>
+            <div class="cliente-nome" style="font-size:15px;font-weight:700;color:#1a2535;margin-top:1px;line-height:1.2;">${cliente}</div>
+          </div>
+        </div>
+        <div style="background:${prioBg};color:${prioColor};border:1px solid ${prioBorder};border-radius:20px;
+                    padding:4px 10px;font-size:10px;font-weight:800;white-space:nowrap;flex-shrink:0;letter-spacing:.3px;">
+          ${prioLabel}
+        </div>
+      </div>
+
+      <!-- divisor -->
+      <div style="height:1px;background:#f0f3f7;margin:0 16px;"></div>
+
+      <!-- detalhes -->
+      <div class="service-card-body" style="padding:12px 16px;">
+        <div class="service-detail-block" style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap;">
+          <div style="background:#f4f6f9;border-radius:8px;padding:8px 12px;flex:1;min-width:140px;">
+            <div style="font-size:9px;color:#8097b8;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:3px;">N. Serviço</div>
+            <div style="font-family:monospace;font-size:13px;font-weight:700;color:#1565c0;">${ns}</div>
+          </div>
+          <div style="background:#f4f6f9;border-radius:8px;padding:8px 12px;flex:1;min-width:120px;">
+            <div style="font-size:9px;color:#8097b8;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:3px;">Prazo</div>
+            <div style="font-size:13px;font-weight:700;color:${prioColor};">${prazo}</div>
+          </div>
+          <div style="background:#f4f6f9;border-radius:8px;padding:8px 12px;flex:1;min-width:100px;">
+            <div style="font-size:9px;color:#8097b8;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:3px;">Município</div>
+            <div style="font-size:12px;font-weight:600;color:#1a2535;">${muni}</div>
+          </div>
+          ${rotaLeitura ? `<div style="background:#f0f4ff;border:1px solid #c8d8f8;border-radius:8px;padding:8px 12px;flex:1;min-width:120px;">
+            <div style="font-size:9px;color:#5070c0;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:3px;">🗂 Rota de Leitura</div>
+            <div style="font-size:11px;font-weight:700;color:#1a2535;font-family:monospace;">${rotaLeitura}</div>
+            ${rotaPrefix ? `<div style="font-size:9px;color:#8097b8;margin-top:2px;">Setor: ${rotaPrefix}</div>` : ''}
+          </div>` : ''}
+        </div>
+
+        <div style="background:#f4f6f9;border-radius:8px;padding:10px 12px;margin-bottom:${obs ? '8px' : '0'};">
+          <div style="font-size:9px;color:#8097b8;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:3px;">Endereço</div>
+          <div style="font-size:13px;color:#1a2535;font-weight:500;line-height:1.4;">${end}</div>
+          <div class="nav-btns" style="margin-top:4px;">${gpsBtn}${wazeBtn}</div>
+          <div class="nav-text" style="display:none;font-size:9px;color:#5a7090;margin-top:4px;">${lat && lng ? "GPS: " + lat + ", " + lng : ""}</div>
+        </div>
+
+        ${obs ? `<div style="background:#fff8e6;border:1px solid #ffe082;border-radius:8px;padding:8px 12px;">
+          <div style="font-size:9px;color:#b07800;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:2px;">📌 Observação / Localização</div>
+          <div style="font-size:12px;color:#5a4000;">${obs}</div>
+        </div>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+
+  const listaRows = rows.map((r, i) => {
+    const ns = r['Numero de Serviço'] || '—';
+    const tipo = (r[' Tipo de Serviço'] || r['Tipo de Serviço'] || '').trim();
+    const codCliente = r['Código Cliente'] || '—';
+    const cliente = r['Nome e Sobrenome Cliente'] || '—';
+    const end = r['Endereço Completo'] || '—';
+    const prazo = (r['Data Prevista Finalização Trabalhos'] || '—').replace(' 23:59','');
+    const obs = r['Dica Localização'] || '';
+    const lat = r['Latitude'] || '';
+    const lng = r['Longitude'] || '';
+    const p = getPrioridade(r);
+    const tOrdem = getTipoOrdem(r);
+    const rowBg = i % 2 === 0 ? '#fff' : '#f8fafc';
+    const borderL = p === 'est' ? 'border-left:3px solid #e53935;' : p === 'hj' ? 'border-left:3px solid #ff9800;' : 'border-left:3px solid #43a047;';
+    const prioText = p === 'est'
+      ? '<span style="color:#c0392b;font-weight:800;font-size:10px;">⚠ Estourada</span>'
+      : p === 'hj'
+      ? '<span style="color:#d35400;font-weight:800;font-size:10px;">⏰ Vence hoje</span>'
+      : '<span style="color:#1a7a40;font-weight:600;font-size:10px;">✓ No prazo</span>';
+    const regBadge = tOrdem === 'REG'
+      ? '<span style="background:#e8f4fd;color:#1565c0;border-radius:3px;padding:1px 5px;font-size:8px;font-weight:800;">REG</span>'
+      : tOrdem === 'NREG'
+      ? '<span style="background:#fff3e8;color:#bf360c;border-radius:3px;padding:1px 5px;font-size:8px;font-weight:800;">NR</span>'
+      : '';
+    var gpsIcons = lat && lng
+      ? ' <a href="https://www.google.com/maps?q=' + lat + ',' + lng + '" target="_blank" style="text-decoration:none;">📍</a>'
+        + ' <a href="https://waze.com/ul?ll=' + lat + ',' + lng + '&navigate=yes" target="_blank" style="text-decoration:none;">🗺</a>'
+      : '';
+    return '<tr style="background:' + rowBg + ';' + borderL + 'border-bottom:1px solid #e8edf5;">'
+      + '<td style="padding:6px 10px;color:#8097b8;font-weight:700;font-size:11px;text-align:center;">' + (i+1) + '</td>'
+      + '<td style="padding:6px 10px;font-family:monospace;font-size:11px;color:#1565c0;font-weight:700;white-space:nowrap;">' + ns + '</td>'
+      + '<td style="padding:6px 10px;font-size:11px;font-weight:600;white-space:nowrap;">' + regBadge + ' ' + tipo + '</td>'
+      + '<td style="padding:6px 10px;font-size:11px;color:#5a7090;">' + codCliente + '</td>'
+      + '<td style="padding:6px 10px;font-size:12px;font-weight:600;">' + cliente + '</td>'
+      + '<td style="padding:6px 10px;font-size:11px;color:#2a3a50;line-height:1.4;">' + end + gpsIcons + '</td>'
+      + '<td style="padding:6px 10px;white-space:nowrap;font-size:11px;">' + prazo + '<br>' + prioText + '</td>'
+      + '<td style="padding:6px 10px;font-size:10px;color:#8097b8;">' + obs + '</td>'
+      + '</tr>';
+  }).join('');
+
+  const statsBar = [
+    est ? `<div style="flex:1;text-align:center;padding:12px 8px;">
+      <div class="kpi-val" style="font-size:26px;font-weight:900;color:#e53935;">${est}</div>
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#b71c1c;margin-top:2px;">Estouradas</div>
+    </div>` : '',
+    hj ? `<div style="flex:1;text-align:center;padding:12px 8px;border-left:1px solid rgba(255,255,255,.15);">
+      <div class="kpi-val" style="font-size:26px;font-weight:900;color:#ff9800;">${hj}</div>
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#e65100;margin-top:2px;">Vencem hoje</div>
+    </div>` : '',
+    `<div style="flex:1;text-align:center;padding:12px 8px;border-left:1px solid rgba(255,255,255,.15);">
+      <div class="kpi-val" style="font-size:26px;font-weight:900;color:#66bb6a;">${ok}</div>
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#2e7d32;margin-top:2px;">No prazo</div>
+    </div>`,
+    `<div style="flex:1;text-align:center;padding:12px 8px;border-left:1px solid rgba(255,255,255,.15);">
+      <div class="kpi-val" style="font-size:26px;font-weight:900;color:#90caf9;">${rows.length}</div>
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#5090d0;margin-top:2px;">Total</div>
+    </div>`
+  ].filter(Boolean).join('');
+
+  return `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Capa de Rota — ${cod} — ${dataHoje}</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background: #eef1f6; color: #1a2535; -webkit-font-smoothing: antialiased; }
+  .no-print {
+    background: #0d1b2a; padding: 10px 16px;
+    display: flex; gap: 8px; align-items: center;
+    position: sticky; top: 0; z-index: 100;
+    border-bottom: 2px solid #e8a020;
+  }
+  .no-print button {
+    padding: 8px 16px; border: none; border-radius: 8px;
+    font-size: 12px; font-weight: 700; cursor: pointer;
+  }
+  .btn-print { background: #e8a020; color: #0d1b2a; }
+  .btn-pdf { background: #c62828; color: #fff; }
+  .no-print-right { margin-left: auto; color: #8097b8; font-size: 11px; }
+  .main-wrap { max-width: 680px; margin: 0 auto; padding: 16px 12px 40px; }
+
+  @media print {
+    @page { margin: 10mm 8mm; size: A4; }
+
+    body { background: #fff !important; font-size: 9pt; }
+    .no-print { display: none !important; }
+    .main-wrap { max-width: 100% !important; padding: 0 !important; }
+
+    /* Header do documento: nunca quebra */
+    .cr-doc-header { page-break-inside: avoid !important; break-inside: avoid !important; margin-bottom: 6pt !important; border-radius: 6pt !important; }
+
+    /* Cada card de serviço: nunca quebra no meio */
+    .service-card { page-break-inside: avoid !important; break-inside: avoid !important; margin-bottom: 5pt !important; border-radius: 6pt !important; }
+
+    /* Compactar padding no print */
+    .service-card-top { padding: 8pt 10pt 6pt !important; }
+    .service-card-body { padding: 6pt 10pt !important; }
+    .service-detail-block { padding: 5pt 8pt !important; margin-bottom: 4pt !important; }
+
+    /* Ocultar botões GPS/Waze no PDF */
+    .nav-btns { display: none !important; }
+
+    /* Mostrar o endereço GPS como texto simples no lugar */
+    .nav-text { display: block !important; font-size: 8pt; color: #5a7090; margin-top: 3pt; }
+
+    /* Reduzir fontes grandes */
+    .kpi-val { font-size: 16pt !important; }
+    .cliente-nome { font-size: 11pt !important; }
+    .seq-num { width: 22pt !important; height: 22pt !important; font-size: 11pt !important; }
+
+    /* Rodapé nunca quebra */
+    .cr-footer-block { page-break-inside: avoid !important; break-inside: avoid !important; border-radius: 6pt !important; margin-top: 4pt !important; }
+
+    /* Forçar cores no print (alguns navegadores bloqueiam background) */
+    * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+  }
+</style>
+</head>
+<body>
+
+<div class="no-print">
+  <button class="btn-print" onclick="window.print()">🖨 Imprimir</button>
+  <button class="btn-pdf" onclick="window.print()">📄 Salvar PDF</button>
+  <div class="no-print-right">${cod} · ${dataHoje}</div>
+</div>
+
+<div class="main-wrap">
+
+  <!-- HEADER -->
+  <div class="cr-doc-header" style="background:linear-gradient(135deg,#0d1b2a 0%,#1b3a5c 100%);border-radius:18px;overflow:hidden;margin-bottom:14px;box-shadow:0 4px 20px rgba(13,27,42,.2);">
+
+    <!-- topo: logo + data -->
+    <div style="padding:18px 20px 14px;display:flex;align-items:flex-start;justify-content:space-between;border-bottom:1px solid rgba(255,255,255,.08);">
+      <div>
+        <div style="font-size:10px;font-weight:800;color:#e8a020;text-transform:uppercase;letter-spacing:2px;">Grupo Cosampa</div>
+        <div style="font-size:12px;color:#8097b8;margin-top:2px;">DESUL Sul · Capa de Rota</div>
+      </div>
+      <div style="text-align:right;">
+        <div style="font-size:18px;font-weight:800;color:#fff;">${dataHoje}</div>
+        <div style="font-size:10px;color:#8097b8;margin-top:1px;">Data da rota</div>
+      </div>
+    </div>
+
+    <!-- equipe + tipo -->
+    <div style="padding:16px 20px 14px;display:flex;align-items:center;gap:14px;border-bottom:1px solid rgba(255,255,255,.08);">
+      <div style="background:rgba(232,160,32,.15);border:1.5px solid rgba(232,160,32,.4);border-radius:10px;padding:8px 14px;text-align:center;flex-shrink:0;">
+        <div style="font-size:9px;color:#e8a020;font-weight:700;text-transform:uppercase;letter-spacing:1px;">Equipe</div>
+        <div style="font-size:16px;font-weight:900;color:#e8a020;font-family:monospace;margin-top:2px;">${cod}</div>
+      </div>
+      <div style="flex:1;min-width:0;">
+        <div style="background:${tipoBg};color:${tipoColor};border-radius:20px;display:inline-block;padding:3px 12px;font-size:11px;font-weight:700;margin-bottom:6px;">${tipoLabel}</div>
+        <div style="font-size:9px;color:#8097b8;text-transform:uppercase;letter-spacing:1px;font-weight:700;">Líder / Responsável</div>
+        <div style="font-size:14px;font-weight:700;color:#fff;margin-top:2px;line-height:1.2;">${lider}</div>
+      </div>
+    </div>
+
+    <!-- kpis -->
+    <div style="display:flex;">${statsBar}</div>
+  </div>
+
+  <!-- SERVIÇOS -->
+  <!-- Título -->
+  <div style="font-size:11px;font-weight:700;color:#8097b8;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:10px;padding:0 2px;">
+    📋 ${rows.length} Serviço${rows.length !== 1 ? 's' : ''} — ${modo === 'lista' ? '☰ Visão Lista' : '▦ Visão Cards'}
+  </div>
+
+  <!-- CONTEÚDO -->
+  ${modo === 'lista'
+    ? '<div style=\"overflow-x:auto;-webkit-overflow-scrolling:touch;border-radius:14px;box-shadow:0 2px 12px rgba(0,0,0,.08);\"><table style=\"width:100%;border-collapse:collapse;font-size:12px;background:#fff;\"><thead><tr style=\"background:#0d1b2a;color:#fff;\"><th style=\"padding:8px 10px;text-align:left;font-size:9px;text-transform:uppercase;letter-spacing:1px;font-weight:700;white-space:nowrap;\">#</th><th style=\"padding:8px 10px;text-align:left;font-size:9px;text-transform:uppercase;letter-spacing:1px;font-weight:700;white-space:nowrap;\">N. Serviço</th><th style=\"padding:8px 10px;text-align:left;font-size:9px;text-transform:uppercase;letter-spacing:1px;font-weight:700;\">Tipo Serviço</th><th style=\"padding:8px 10px;text-align:left;font-size:9px;text-transform:uppercase;letter-spacing:1px;font-weight:700;\">Cod. Cliente</th><th style=\"padding:8px 10px;text-align:left;font-size:9px;text-transform:uppercase;letter-spacing:1px;font-weight:700;\">Nome Cliente</th><th style=\"padding:8px 10px;text-align:left;font-size:9px;text-transform:uppercase;letter-spacing:1px;font-weight:700;\">Endereço</th><th style=\"padding:8px 10px;text-align:left;font-size:9px;text-transform:uppercase;letter-spacing:1px;font-weight:700;white-space:nowrap;\">Data Limite</th><th style=\"padding:8px 10px;text-align:left;font-size:9px;text-transform:uppercase;letter-spacing:1px;font-weight:700;\">Obs</th></tr></thead><tbody>' + listaRows + '</tbody></table></div>'
+    : cards
+  }
+
+  <!-- RODAPÉ -->
+  <div class="cr-footer-block" style="background:#fff;border-radius:14px;padding:16px 20px;margin-top:6px;box-shadow:0 2px 8px rgba(0,0,0,.06);">
+    <div style="font-size:10px;color:#8097b8;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:14px;">Confirmação de Recebimento</div>
+    <div style="display:flex;gap:20px;flex-wrap:wrap;">
+      <div style="flex:1;min-width:150px;">
+        <div style="border-bottom:1.5px solid #c0ccd8;margin-bottom:6px;height:36px;"></div>
+        <div style="font-size:10px;color:#8097b8;text-align:center;">Responsável pela equipe</div>
+      </div>
+      <div style="flex:1;min-width:150px;">
+        <div style="border-bottom:1.5px solid #c0ccd8;margin-bottom:6px;height:36px;"></div>
+        <div style="font-size:10px;color:#8097b8;text-align:center;">Supervisor / Gestor</div>
+      </div>
+    </div>
+    <div style="margin-top:14px;text-align:center;font-size:10px;color:#c0ccd8;">
+      Gerado em ${new Date().toLocaleString('pt-BR')} · DESUL Sul · Grupo Cosampa
+    </div>
+  </div>
+
+</div>
+</body>
+</html>`;
+}
+
+
+// ══ DOWNLOAD ══
+function verEquipe(cod, modo) {
+  const cap = capasGeradas[cod];
+  if (!cap) { showToast('Gere as capas primeiro'); return; }
+  const html = cap[modo || 'cards'];
+  const win = window.open('', '_blank');
+  win.document.write(html);
+  win.document.close();
+}
+
+function downloadEquipe(cod, modo) {
+  const cap = capasGeradas[cod];
+  if (!cap) { showToast('Gere as capas primeiro'); return; }
+  modo = modo || 'cards';
+  const html = cap[modo];
+  const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  const sufixo = modo === 'lista' ? '_LISTA' : '_CARDS';
+  a.download = `CapaRota_${cod}${sufixo}_${hoje.toLocaleDateString('pt-BR').replace(/\//g,'-')}.html`;
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast('✔ Baixado: ' + cod + ' (' + modo + ')');
+}
+
+function imprimirEquipe(cod) {
+  const cap = capasGeradas[cod];
+  const html = cap ? cap['cards'] : null;
+  if (!html) { showToast('Gere as capas primeiro'); return; }
+  // Abre janela oculta (1x1 fora da tela), escreve o HTML e dispara print
+  const win = window.open('', '_blank', 'width=1,height=1,left=-9999,top=-9999');
+  win.document.open();
+  win.document.write(html);
+  win.document.close();
+  win.addEventListener('load', () => {
+    win.resizeTo(820, 900);
+    win.moveTo(
+      Math.round((window.screen.availWidth - 820) / 2),
+      Math.round((window.screen.availHeight - 900) / 2)
+    );
+    setTimeout(() => {
+      win.focus();
+      win.print();
+      // Fecha a janela auxiliar após o diálogo de impressão
+      win.addEventListener('afterprint', () => win.close());
+    }, 300);
+  });
+  showToast('Gerando PDF: ' + cod);
+}
+
+function downloadTodas() {
+  const keys = Object.keys(capasGeradas);
+  if (!keys.length) { showToast('Gere as capas primeiro'); return; }
+
+  // Gerar um único HTML com todas as capas separadas por quebra de página
+  let combinado = `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Capas de Rota — DESUL Sul — ${hoje.toLocaleDateString('pt-BR')}</title>
+<style>
+  body { margin: 0; padding: 0; background: #f0f0f0; }
+  .pagina { page-break-after: always; background: #fff; margin: 20px auto; max-width: 960px; }
+  .pagina:last-child { page-break-after: auto; }
+  @media print { .pagina { margin: 0; max-width: 100%; box-shadow: none; } }
+  .no-print { background: #0d1b2a; padding: 10px 20px; display: flex; align-items: center; gap: 10px; position: sticky; top:0; z-index: 100; }
+  .no-print button { padding: 7px 16px; background: #e8a020; color: #0d1b2a; border: none; border-radius: 6px; font-size: 12px; font-weight: 700; cursor: pointer; }
+  .no-print span { color: #8097b8; font-size: 12px; }
+</style>
+</head>
+<body>
+<div class="no-print">
+  <button onclick="window.print()">🖨 Imprimir todas / Salvar PDF</button>
+  <span>${keys.length} equipes · ${hoje.toLocaleDateString('pt-BR')}</span>
+</div>
+`;
+
+  keys.sort().forEach(cod => {
+    // Extract only the body content from each capa
+    const match = (capasGeradas[cod].cards || '').match(/<body[^>]*>([\s\S]*)<\/body>/i);
+    const bodyContent = match ? match[1].replace(/<div class="no-print">[\s\S]*?<\/div>/,'') : '';
+    // Extract styles too
+    const styleMatch = (capasGeradas[cod].cards || '').match(/<style[^>]*>([\s\S]*?)<\/style>/i);
+    const styleContent = styleMatch ? styleMatch[1] : '';
+    combinado += `<div class="pagina">
+<style>${styleContent}</style>
+${bodyContent}
+</div>\n`;
+  });
+
+  combinado += `</body></html>`;
+
+  const blob = new Blob([combinado], { type: 'text/html;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `CapasRota_DESUL_Sul_${hoje.toLocaleDateString('pt-BR').replace(/\//g,'-')}.html`;
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast(`✔ ${keys.length} capas baixadas`);
+}
+
+// ══ SUPABASE ══
+async function sbFetch(method, body) {
+  const res = await fetch(SB_URL + '/rest/v1/snapshots', {
+    method,
+    headers: {
+      'apikey': SB_KEY,
+      'Authorization': 'Bearer ' + SB_KEY,
+      'Content-Type': 'application/json',
+      'Prefer': method === 'POST' ? 'resolution=merge-duplicates' : ''
+    },
+    body: body ? JSON.stringify(body) : undefined
+  });
+  return res;
+}
+
+async function checarTimestamps() {
+  try {
+    const res = await fetch(SB_URL + '/rest/v1/snapshots?select=regiao,atualizado_em', {
+      headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY }
+    });
+    const rows = await res.json();
+    rows.forEach(r => {
+      const dt = new Date(r.atualizado_em);
+      const label = dt.toLocaleDateString('pt-BR') + ' ' + dt.toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'});
+      if (r.regiao === 'Sul') document.getElementById('ts-sul').textContent = 'Atualizado ' + label;
+      if (r.regiao === 'CentroSul') document.getElementById('ts-cs').textContent = 'Atualizado ' + label;
+    });
+    if (!rows.find(r => r.regiao === 'Sul')) document.getElementById('ts-sul').textContent = 'Sem dados';
+    if (!rows.find(r => r.regiao === 'CentroSul')) document.getElementById('ts-cs').textContent = 'Sem dados';
+  } catch(e) {
+    document.getElementById('ts-sul').textContent = 'Erro ao verificar';
+    document.getElementById('ts-cs').textContent = 'Erro ao verificar';
+  }
+}
+
+async function publicarNuvem(regiao) {
+  if (!allData.length) { showToast('Carregue um arquivo primeiro'); return; }
+  showToast('⏳ Publicando ' + regiao + '...');
+  try {
+    const res = await sbFetch('POST', {
+      regiao,
+      dados: allData,
+      atualizado_em: new Date().toISOString()
+    });
+    if (res.ok || res.status === 201 || res.status === 200) {
+      showToast('✔ Publicado! ' + regiao + ' atualizado na nuvem', 3000);
+      checarTimestamps();
+    } else {
+      const err = await res.text();
+      showToast('Erro: ' + err, 4000);
+    }
+  } catch(e) {
+    showToast('Erro de conexão: ' + e.message, 4000);
+  }
+}
+
+async function carregarNuvem(regiao) {
+  showToast('⏳ Carregando ' + regiao + ' da nuvem...');
+  try {
+    const res = await fetch(SB_URL + '/rest/v1/snapshots?regiao=eq.' + regiao + '&select=dados,atualizado_em', {
+      headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY }
+    });
+    const rows = await res.json();
+    if (!rows.length || !rows[0].dados) { showToast('Sem dados salvos para ' + regiao, 3000); return; }
+    allData = rows[0].dados;
+    const dt = new Date(rows[0].atualizado_em);
+    fileName = regiao + ' — nuvem ' + dt.toLocaleDateString('pt-BR') + ' ' + dt.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+    setupUI();
+    showToast('✔ ' + allData.length + ' registros carregados (' + regiao + ')', 3000);
+    // Mark active button
+    document.getElementById('btn-cloud-sul').classList.toggle('ativo', regiao === 'Sul');
+    document.getElementById('btn-cloud-cs').classList.toggle('ativo', regiao === 'CentroSul');
+  } catch(e) {
+    showToast('Erro: ' + e.message, 4000);
+  }
+}
+
+// Verificar timestamps ao carregar a página
+window.addEventListener('DOMContentLoaded', checarTimestamps);
+
+function resetApp() {
+  document.getElementById('upload-zone').style.display = 'block';
+  document.getElementById('control-panel').style.display = 'none';
+  document.getElementById('result-section').style.display = 'none';
+  document.getElementById('file-input').value = '';
+  allData = []; capasGeradas = {};
+}
+
+// ══ TOAST ══
+function showToast(msg, duration=2000) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.style.display = 'block';
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => t.style.display = 'none', duration);
+}
+</script>
+</body>
+</html>
