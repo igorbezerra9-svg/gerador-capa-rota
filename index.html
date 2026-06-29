@@ -831,6 +831,21 @@ function getFiltered() {
   });
 }
 
+// ══ HELPER TIPO ══
+function formatTipo(tipoFull) {
+  if (!tipoFull) return { cod: '—', nome: '' };
+  const parts = tipoFull.trim().split(' - ');
+  const cod = parts[0] || tipoFull;
+  const nome = parts.slice(1).join(' - ') || '';
+  return { cod, nome };
+}
+
+function tipoHTML(tipoFull) {
+  const { cod, nome } = formatTipo(tipoFull);
+  return '<span style="font-family:monospace;font-weight:700;font-size:11px;">' + cod + '</span>'
+    + (nome ? '<br><span style="font-size:9px;color:#8097b8;font-weight:400;">' + nome.toLowerCase() + '</span>' : '');
+}
+
 // ══ MAPA DE TIPOS ══
 const TIPO_REGULADA = {
   'OUTMML':true,'OUTMGD':true,'OUTVPC':true,'OUTIRD':true,'OUTTCP':true,
@@ -1085,7 +1100,8 @@ function gerarHTMLCapa(cod, lider, rows, dataHoje, est, hj, ok, modo) {
                       flex-shrink:0;">${i+1}</div>
           <div style="min-width:0;">
             <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:2px;">
-              <span style="font-size:11px;color:#8097b8;font-weight:600;text-transform:uppercase;letter-spacing:.8px;">${tipo}</span>
+              <span style="font-family:monospace;font-size:11px;font-weight:700;color:#8097b8;">${tipo.split(" - ")[0]}</span>
+              ${tipo.split(" - ").slice(1).join(" - ") ? '<span style="font-size:9px;color:#a0aec0;">— ' + tipo.split(" - ").slice(1).join(" - ").toLowerCase() + '</span>' : ''}
               ${tBadge}
             </div>
             <div class="cliente-nome" style="font-size:15px;font-weight:700;color:#1a2535;margin-top:1px;line-height:1.2;">${cliente}</div>
@@ -1168,7 +1184,11 @@ function gerarHTMLCapa(cod, lider, rows, dataHoje, est, hj, ok, modo) {
     return '<tr style="background:' + rowBg + ';' + borderL + 'border-bottom:1px solid #e8edf5;">'
       + '<td style="padding:6px 10px;color:#8097b8;font-weight:700;font-size:11px;text-align:center;">' + (i+1) + '</td>'
       + '<td style="padding:6px 10px;font-family:monospace;font-size:11px;color:#1565c0;font-weight:700;white-space:nowrap;">' + ns + '</td>'
-      + '<td style="padding:6px 10px;font-size:11px;font-weight:600;white-space:nowrap;">' + regBadge + ' ' + tipo + '</td>'
+      + '<td style="padding:6px 10px;white-space:nowrap;">'
+        + regBadge + ' '
+        + '<span style="font-family:monospace;font-weight:700;font-size:11px;">' + (tipo.split(' - ')[0]) + '</span>'
+        + (tipo.split(' - ').slice(1).join(' - ') ? '<br><span style="font-size:9px;color:#8097b8;">' + tipo.split(' - ').slice(1).join(' - ').toLowerCase() + '</span>' : '')
+        + '</td>'
       + '<td style="padding:6px 10px;font-size:11px;color:#5a7090;">' + codCliente + '</td>'
       + '<td style="padding:6px 10px;font-size:12px;font-weight:600;">' + cliente + '</td>'
       + '<td style="padding:6px 10px;font-size:11px;color:#2a3a50;line-height:1.4;">' + end + gpsIcons + '</td>'
@@ -1591,7 +1611,9 @@ function pgRenderTiposBars(dados) {
     const isNReg = TIPO_NAO_REGULADA[cod];
     const cor = isReg ? '#2a78d6' : isNReg ? '#e34948' : '#888';
     const pct = Math.round((n/max)*100);
-    const nome = tipo.length > 30 ? tipo.substring(0,30)+'…' : tipo;
+    const codTipo = tipo.split(' - ')[0] || tipo;
+    const nomeTipo = tipo.split(' - ').slice(1).join(' - ').toLowerCase();
+    const nome = codTipo + (nomeTipo ? ' · ' + (nomeTipo.length > 20 ? nomeTipo.substring(0,20)+'…' : nomeTipo) : '');
     html += `<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
       <div style="font-size:10px;color:var(--gray-400);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${tipo}">${nome}</div>
       <div style="width:80px;background:var(--gray-100);border-radius:4px;height:8px;overflow:hidden;flex-shrink:0;">
@@ -1696,7 +1718,11 @@ function pgFiltrarModal() {
     const bg = i%2===0?'#fff':'#f8fafc';
     html += '<tr style="background:' + bg + ';border-bottom:1px solid #e8edf5;">'
       + '<td style="padding:7px 10px;font-family:monospace;font-size:11px;color:#1565c0;white-space:nowrap;">' + ns + '</td>'
-      + '<td style="padding:7px 10px;font-size:11px;">' + tOrdemLabel(r) + ' ' + tipo + '</td>'
+      + '<td style="padding:7px 10px;white-space:nowrap;">'
+        + tOrdemLabel(r) + ' '
+        + '<span style="font-family:monospace;font-weight:700;font-size:11px;">' + (tipo.split(' - ')[0]) + '</span>'
+        + (tipo.split(' - ').slice(1).join(' - ') ? '<br><span style="font-size:9px;color:#8097b8;">' + tipo.split(' - ').slice(1).join(' - ').toLowerCase() + '</span>' : '')
+        + '</td>'
       + '<td style="padding:7px 10px;font-size:11px;font-family:monospace;color:#1565c0;white-space:nowrap;">' + cod + '</td>'
       + '<td style="padding:7px 10px;font-size:12px;font-weight:600;">' + cliente + '</td>'
       + '<td style="padding:7px 10px;font-size:11px;color:#2a3a50;">' + end + gps + '</td>'
