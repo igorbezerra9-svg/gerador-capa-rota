@@ -1634,6 +1634,81 @@ function pgRenderEquipesCriticas(dados) {
 
 let pgModalDados = [];
 
+function pgAbrirModal(tipo) {
+  const dados = pgGetFiltrado();
+  const labels = { est: '⚠ OS Estouradas', hj: '⏰ OS que vencem hoje', ok: '✓ OS no prazo' };
+  pgModalDados = dados.filter(r => getPrioridade(r) === tipo);
+  document.getElementById('pg-modal-title').textContent = labels[tipo];
+  document.getElementById('pg-modal-sub').textContent = pgModalDados.length + ' ordens de serviço · ' + pgRegiao;
+  document.getElementById('pg-modal-search').value = '';
+  pgFiltrarModal();
+  document.getElementById('pg-modal').style.display = 'flex';
+}
+
+function pgFecharModal() {
+  document.getElementById('pg-modal').style.display = 'none';
+}
+
+document.addEventListener('click', function(e) {
+  const modal = document.getElementById('pg-modal');
+  if (e.target === modal) pgFecharModal();
+});
+
+function pgFiltrarModal() {
+  const q = document.getElementById('pg-modal-search').value.toLowerCase();
+  const filtrado = q
+    ? pgModalDados.filter(r =>
+        (r['Numero de Serviço']||'').toLowerCase().includes(q) ||
+        (r['Nome e Sobrenome Cliente']||'').toLowerCase().includes(q) ||
+        (r['Endereço Completo']||'').toLowerCase().includes(q) ||
+        (r['Código Equipe']||'').toLowerCase().includes(q)
+      )
+    : pgModalDados;
+
+  const tOrdemLabel = r => {
+    const t = getTipoOrdem(r);
+    if (t==='REG') return '<span style="background:#e8f4fd;color:#1565c0;border-radius:3px;padding:1px 5px;font-size:9px;font-weight:700;">REG</span>';
+    if (t==='NREG') return '<span style="background:#fff3e8;color:#bf360c;border-radius:3px;padding:1px 5px;font-size:9px;font-weight:700;">NR</span>';
+    return '';
+  };
+
+  const rows = filtrado.sort((a,b) => {
+    const da = parseDateTimeStr(a['Data Prevista Finalização Trabalhos']);
+    const db = parseDateTimeStr(b['Data Prevista Finalização Trabalhos']);
+    if (!da && !db) return 0; if (!da) return 1; if (!db) return -1;
+    return da - db;
+  });
+
+  let html = '';
+  rows.forEach((r, i) => {
+    const ns = r['Numero de Serviço'] || '—';
+    const tipo = (r[' Tipo de Serviço'] || r['Tipo de Serviço'] || '').trim();
+    const cod = r['Código Equipe'] || '—';
+    const cliente = r['Nome e Sobrenome Cliente'] || '—';
+    const end = r['Endereço Completo'] || '—';
+    const prazo = (r['Data Prevista Finalização Trabalhos'] || '—').replace(' 23:59','');
+    const muni = r['Município'] || '—';
+    const lat = r['Latitude'] || '';
+    const lng = r['Longitude'] || '';
+    const gps = lat && lng
+      ? ' <a href="https://www.google.com/maps?q=' + lat + ',' + lng + '" target="_blank" style="text-decoration:none;">📍</a>'
+      : '';
+    const bg = i%2===0?'#fff':'#f8fafc';
+    html += '<tr style="background:' + bg + ';border-bottom:1px solid #e8edf5;">'
+      + '<td style="padding:7px 10px;font-family:monospace;font-size:11px;color:#1565c0;white-space:nowrap;">' + ns + '</td>'
+      + '<td style="padding:7px 10px;font-size:11px;">' + tOrdemLabel(r) + ' ' + tipo + '</td>'
+      + '<td style="padding:7px 10px;font-size:11px;font-family:monospace;color:#1565c0;white-space:nowrap;">' + cod + '</td>'
+      + '<td style="padding:7px 10px;font-size:12px;font-weight:600;">' + cliente + '</td>'
+      + '<td style="padding:7px 10px;font-size:11px;color:#2a3a50;">' + end + gps + '</td>'
+      + '<td style="padding:7px 10px;font-size:11px;white-space:nowrap;font-weight:600;">' + prazo + '</td>'
+      + '<td style="padding:7px 10px;font-size:11px;color:#8097b8;">' + muni + '</td>'
+      + '</tr>';
+  });
+
+  document.getElementById('pg-modal-body').innerHTML = html ||
+    '<tr><td colspan="7" style="padding:20px;text-align:center;color:#8097b8;">Nenhuma OS encontrada</td></tr>';
+}
+
 function pgAbrirModalEquipe(codEquipe, prioFiltro) {
   const dados = pgGetFiltrado().filter(r => (r['Código Equipe']||'') === codEquipe);
   const filtrado = prioFiltro ? dados.filter(r => getPrioridade(r) === prioFiltro) : dados;
