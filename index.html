@@ -345,6 +345,18 @@
   }
   .cr-footer strong { color: #1a2535; }
 
+  .pg-reg-btn {
+    padding:7px 16px;border:1.5px solid var(--gray-200);border-radius:20px;
+    background:var(--white);color:var(--gray-700);font-size:12px;font-weight:700;cursor:pointer;
+    transition:all .15s;
+  }
+  .pg-reg-btn.active { background:var(--navy);color:var(--accent);border-color:var(--navy); }
+  .pg-tipo-btn {
+    padding:5px 12px;border:1.5px solid var(--gray-200);border-radius:20px;
+    background:var(--white);color:var(--gray-700);font-size:11px;font-weight:700;cursor:pointer;
+  }
+  .pg-tipo-btn.active { background:var(--navy);color:var(--accent);border-color:var(--navy); }
+
   .btn-cloud {
     flex:1; min-width:160px;
     background:var(--gray-100); border:1.5px solid var(--gray-200);
@@ -374,7 +386,7 @@
 </head>
 <body>
 
-<div id="app-header">
+<div id="app-header" style="justify-content:space-between;">
   <div class="logo">DS</div>
   <div>
     <h1>Gerador de Capa de Rota</h1>
@@ -528,6 +540,79 @@
     </button>
   </div>
 
+</div>
+
+<!-- ══ PAINEL GERENCIAL ══ -->
+<div id="painel-section" style="display:none;max-width:960px;margin:0 auto;padding:24px;">
+
+  <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;align-items:center;">
+    <span style="font-size:11px;color:var(--gray-400);font-weight:700;text-transform:uppercase;letter-spacing:1px;">Região:</span>
+    <button class="pg-reg-btn active" id="pg-btn-sul" onclick="pgSetRegiao('Sul')">🌍 Sul</button>
+    <button class="pg-reg-btn" id="pg-btn-cs" onclick="pgSetRegiao('CentroSul')">🌎 Centro Sul</button>
+    <div style="margin-left:auto;display:flex;gap:8px;align-items:center;">
+      <span style="font-size:11px;color:var(--gray-400);font-weight:700;text-transform:uppercase;letter-spacing:1px;">Tipo:</span>
+      <button class="pg-tipo-btn active" id="pg-tipo-all" onclick="pgSetTipo('')">Todas</button>
+      <button class="pg-tipo-btn" id="pg-tipo-reg" onclick="pgSetTipo('REG')" style="background:#e8f4fd;color:#1565c0;border-color:#90caf9;">Reguladas</button>
+      <button class="pg-tipo-btn" id="pg-tipo-nreg" onclick="pgSetTipo('NREG')" style="background:#fff3e8;color:#bf360c;border-color:#ffb74d;">Não reguladas</button>
+    </div>
+  </div>
+
+  <div id="pg-sem-dados" style="display:none;text-align:center;padding:60px;color:var(--gray-400);">
+    <div style="font-size:40px;margin-bottom:12px;">☁</div>
+    <div style="font-size:16px;font-weight:600;">Nenhum dado na nuvem para essa região</div>
+    <div style="font-size:13px;margin-top:6px;">Faça upload do Excel e publique primeiro</div>
+  </div>
+
+  <div id="pg-content">
+    <!-- KPIs -->
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:16px;" id="pg-kpis"></div>
+
+    <!-- Gráficos row 1 -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+      <div style="background:var(--white);border:0.5px solid var(--gray-200);border-radius:12px;padding:16px;">
+        <div style="font-size:11px;font-weight:700;color:var(--gray-400);text-transform:uppercase;letter-spacing:.8px;margin-bottom:12px;">Por centro de serviço</div>
+        <div id="pg-cs-bars"></div>
+      </div>
+      <div style="background:var(--white);border:0.5px solid var(--gray-200);border-radius:12px;padding:16px;">
+        <div style="font-size:11px;font-weight:700;color:var(--gray-400);text-transform:uppercase;letter-spacing:.8px;margin-bottom:12px;">Tipos mais frequentes</div>
+        <div id="pg-tipos-bars"></div>
+      </div>
+    </div>
+
+    <!-- Equipes críticas -->
+    <div style="background:var(--white);border:0.5px solid var(--gray-200);border-radius:12px;padding:16px;margin-bottom:12px;">
+      <div style="font-size:11px;font-weight:700;color:var(--gray-400);text-transform:uppercase;letter-spacing:.8px;margin-bottom:12px;">Equipes com mais estouradas</div>
+      <div id="pg-equipes-criticas" style="display:grid;grid-template-columns:1fr 1fr;gap:0 24px;"></div>
+    </div>
+
+    <!-- Tabela completa -->
+    <div style="background:var(--white);border:0.5px solid var(--gray-200);border-radius:12px;overflow:hidden;">
+      <div style="padding:16px;border-bottom:0.5px solid var(--gray-200);display:flex;justify-content:space-between;align-items:center;">
+        <div style="font-size:11px;font-weight:700;color:var(--gray-400);text-transform:uppercase;letter-spacing:.8px;">Todas as equipes</div>
+        <input type="text" id="pg-search" placeholder="Buscar equipe..." oninput="pgRenderTabela()" style="font-size:12px;padding:6px 12px;border:1px solid var(--gray-200);border-radius:8px;width:200px;">
+      </div>
+      <div style="overflow-x:auto;">
+        <table style="width:100%;border-collapse:collapse;font-size:12px;" id="pg-tabela">
+          <thead>
+            <tr style="background:#0d1b2a;color:#fff;">
+              <th style="padding:8px 12px;text-align:left;font-size:9px;text-transform:uppercase;letter-spacing:1px;">Equipe</th>
+              <th style="padding:8px 12px;text-align:left;font-size:9px;text-transform:uppercase;letter-spacing:1px;">Líder</th>
+              <th style="padding:8px 12px;text-align:left;font-size:9px;text-transform:uppercase;letter-spacing:1px;">Tipo</th>
+              <th style="padding:8px 12px;text-align:center;font-size:9px;text-transform:uppercase;letter-spacing:1px;color:#f06060;">Estouradas</th>
+              <th style="padding:8px 12px;text-align:center;font-size:9px;text-transform:uppercase;letter-spacing:1px;color:#f0a040;">Vence hoje</th>
+              <th style="padding:8px 12px;text-align:center;font-size:9px;text-transform:uppercase;letter-spacing:1px;color:#50d080;">No prazo</th>
+              <th style="padding:8px 12px;text-align:center;font-size:9px;text-transform:uppercase;letter-spacing:1px;">Total</th>
+              <th style="padding:8px 12px;text-align:center;font-size:9px;text-transform:uppercase;letter-spacing:1px;">Reguladas</th>
+              <th style="padding:8px 12px;text-align:center;font-size:9px;text-transform:uppercase;letter-spacing:1px;">Não reg.</th>
+            </tr>
+          </thead>
+          <tbody id="pg-tabela-body"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div style="font-size:11px;color:var(--gray-400);text-align:right;margin-top:8px;" id="pg-atualizado"></div>
+  </div>
 </div>
 
 <div id="toast"></div>
@@ -1303,6 +1388,241 @@ ${bodyContent}
   a.click();
   URL.revokeObjectURL(url);
   showToast(`✔ ${keys.length} capas baixadas`);
+}
+
+// ══ TAB NAVIGATION ══
+function setTab(tab) {
+  const isGer = tab === 'gerador';
+  document.getElementById('main').style.display = isGer ? 'block' : 'none';
+  document.getElementById('painel-section').style.display = isGer ? 'none' : 'block';
+  document.getElementById('tab-gerador').style.color = isGer ? '#e8a020' : '#8097b8';
+  document.getElementById('tab-gerador').style.borderBottomColor = isGer ? '#e8a020' : 'transparent';
+  document.getElementById('tab-painel').style.color = isGer ? '#8097b8' : '#e8a020';
+  document.getElementById('tab-painel').style.borderBottomColor = isGer ? 'transparent' : '#e8a020';
+  if (!isGer) pgCarregar();
+}
+
+// ══ PAINEL GERENCIAL ══
+let pgRegiao = 'Sul';
+let pgTipo = '';
+let pgDados = [];
+let pgAtualizado = '';
+
+function pgSetRegiao(r) {
+  pgRegiao = r;
+  document.getElementById('pg-btn-sul').classList.toggle('active', r === 'Sul');
+  document.getElementById('pg-btn-cs').classList.toggle('active', r === 'CentroSul');
+  pgCarregar();
+}
+
+function pgSetTipo(t) {
+  pgTipo = t;
+  ['all','reg','nreg'].forEach(k => document.getElementById('pg-tipo-' + k).classList.remove('active'));
+  if (t === '') document.getElementById('pg-tipo-all').classList.add('active');
+  else if (t === 'REG') document.getElementById('pg-tipo-reg').classList.add('active');
+  else document.getElementById('pg-tipo-nreg').classList.add('active');
+  pgRender();
+}
+
+async function pgCarregar() {
+  showToast('⏳ Carregando painel...');
+  try {
+    const res = await fetch(SB_URL + '/rest/v1/snapshots?regiao=eq.' + pgRegiao + '&select=dados,atualizado_em', {
+      headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY }
+    });
+    const rows = await res.json();
+    if (!rows.length || !rows[0].dados) {
+      document.getElementById('pg-sem-dados').style.display = 'block';
+      document.getElementById('pg-content').style.display = 'none';
+      showToast('Sem dados para ' + pgRegiao, 3000);
+      return;
+    }
+    document.getElementById('pg-sem-dados').style.display = 'none';
+    document.getElementById('pg-content').style.display = 'block';
+    pgDados = rows[0].dados;
+    const dt = new Date(rows[0].atualizado_em);
+    pgAtualizado = 'Dados da nuvem · ' + pgRegiao + ' · ' + dt.toLocaleDateString('pt-BR') + ' ' + dt.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+    pgRender();
+    showToast('✔ Painel carregado — ' + pgDados.length + ' registros', 2000);
+  } catch(e) {
+    showToast('Erro: ' + e.message, 4000);
+  }
+}
+
+function pgGetFiltrado() {
+  const EXCLUIR = ['programáveis','a reprogramar'];
+  return pgDados.filter(r => {
+    const estado = (r['Estado TdC'] || '').trim().toLowerCase();
+    if (EXCLUIR.includes(estado)) return false;
+    if (pgTipo && getTipoOrdem(r) !== pgTipo) return false;
+    return true;
+  });
+}
+
+function pgRender() {
+  const dados = pgGetFiltrado();
+  pgRenderKPIs(dados);
+  pgRenderCSBars(dados);
+  pgRenderTiposBars(dados);
+  pgRenderEquipesCriticas(dados);
+  pgRenderTabela();
+  document.getElementById('pg-atualizado').textContent = pgAtualizado;
+}
+
+function pgRenderKPIs(dados) {
+  let est=0, hj=0, ok=0;
+  const eqs = new Set();
+  dados.forEach(r => {
+    const p = getPrioridade(r);
+    if (p==='est') est++;
+    else if (p==='hj') hj++;
+    else ok++;
+    if (r['Código Equipe']) eqs.add(r['Código Equipe']);
+  });
+  document.getElementById('pg-kpis').innerHTML = `
+    <div style="background:#fdecea;border-radius:12px;padding:14px 16px;">
+      <div style="font-size:10px;color:#c0392b;text-transform:uppercase;letter-spacing:.8px;font-weight:700;margin-bottom:6px;">Estouradas</div>
+      <div style="font-size:28px;font-weight:700;color:#c0392b;line-height:1;">${est}</div>
+      <div style="font-size:11px;color:#e57373;margin-top:4px;">${((est/dados.length)*100||0).toFixed(1)}% do total</div>
+    </div>
+    <div style="background:#fff3e8;border-radius:12px;padding:14px 16px;">
+      <div style="font-size:10px;color:#d35400;text-transform:uppercase;letter-spacing:.8px;font-weight:700;margin-bottom:6px;">Vencem hoje</div>
+      <div style="font-size:28px;font-weight:700;color:#d35400;line-height:1;">${hj}</div>
+      <div style="font-size:11px;color:#ffb74d;margin-top:4px;">até 09:00 amanhã</div>
+    </div>
+    <div style="background:#eaf7ef;border-radius:12px;padding:14px 16px;">
+      <div style="font-size:10px;color:#1a7a40;text-transform:uppercase;letter-spacing:.8px;font-weight:700;margin-bottom:6px;">No prazo</div>
+      <div style="font-size:28px;font-weight:700;color:#1a7a40;line-height:1;">${ok}</div>
+      <div style="font-size:11px;color:#66bb6a;margin-top:4px;">${((ok/dados.length)*100||0).toFixed(1)}% do total</div>
+    </div>
+    <div style="background:#eef3fb;border-radius:12px;padding:14px 16px;">
+      <div style="font-size:10px;color:#1565c0;text-transform:uppercase;letter-spacing:.8px;font-weight:700;margin-bottom:6px;">Total em campo</div>
+      <div style="font-size:28px;font-weight:700;color:#1565c0;line-height:1;">${dados.length}</div>
+      <div style="font-size:11px;color:#90caf9;margin-top:4px;">${eqs.size} equipes</div>
+    </div>`;
+}
+
+function pgRenderCSBars(dados) {
+  const csMap = {};
+  dados.forEach(r => {
+    const cod = r['Código Equipe'] || '';
+    let cs = 'Outros';
+    if (cod.startsWith('JZ') || cod.includes('-JZ-') || (r['Município']||'').toUpperCase().includes('JUAZEIRO')) cs = 'Juazeiro';
+    else if (cod.startsWith('ML') || cod.includes('-ML-') || (r['Município']||'').toUpperCase().includes('MILAGRE')) cs = 'Milagres';
+    else if (cod.startsWith('CP') || cod.includes('-CP-') || (r['Município']||'').toUpperCase().includes('CAMPO')) cs = 'C. Sales';
+    csMap[cs] = (csMap[cs]||0) + 1;
+  });
+  const total = dados.length || 1;
+  const colors = { 'Juazeiro':'#2a78d6','Milagres':'#1baf7a','C. Sales':'#eda100','Outros':'#888' };
+  let html = '';
+  Object.entries(csMap).sort((a,b)=>b[1]-a[1]).forEach(([cs,n]) => {
+    const pct = Math.round((n/total)*100);
+    html += `<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+      <div style="font-size:11px;color:var(--gray-400);width:64px;text-align:right;flex-shrink:0;">${cs}</div>
+      <div style="flex:1;background:var(--gray-100);border-radius:4px;height:9px;overflow:hidden;">
+        <div style="width:${pct}%;height:100%;background:${colors[cs]||'#888'};border-radius:4px;"></div>
+      </div>
+      <div style="font-size:11px;color:${colors[cs]||'#888'};font-weight:700;width:28px;">${n}</div>
+    </div>`;
+  });
+  document.getElementById('pg-cs-bars').innerHTML = html;
+}
+
+function pgRenderTiposBars(dados) {
+  const tipMap = {};
+  dados.forEach(r => {
+    const t = (r[' Tipo de Serviço'] || r['Tipo de Serviço'] || '').trim();
+    tipMap[t] = (tipMap[t]||0) + 1;
+  });
+  const top = Object.entries(tipMap).sort((a,b)=>b[1]-a[1]).slice(0,8);
+  const max = top[0]?.[1] || 1;
+  let html = '';
+  top.forEach(([tipo,n]) => {
+    const cod = tipo.split(' ')[0].split('-')[0];
+    const isReg = TIPO_REGULADA[cod];
+    const isNReg = TIPO_NAO_REGULADA[cod];
+    const cor = isReg ? '#2a78d6' : isNReg ? '#e34948' : '#888';
+    const pct = Math.round((n/max)*100);
+    const nome = tipo.length > 30 ? tipo.substring(0,30)+'…' : tipo;
+    html += `<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+      <div style="font-size:10px;color:var(--gray-400);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${tipo}">${nome}</div>
+      <div style="width:80px;background:var(--gray-100);border-radius:4px;height:8px;overflow:hidden;flex-shrink:0;">
+        <div style="width:${pct}%;height:100%;background:${cor};border-radius:4px;"></div>
+      </div>
+      <div style="font-size:11px;color:${cor};font-weight:700;width:28px;flex-shrink:0;">${n}</div>
+    </div>`;
+  });
+  document.getElementById('pg-tipos-bars').innerHTML = html;
+}
+
+function pgRenderEquipesCriticas(dados) {
+  const eqMap = {};
+  dados.forEach(r => {
+    const cod = r['Código Equipe'] || '';
+    if (!cod) return;
+    if (!eqMap[cod]) eqMap[cod] = { lider: r['Chefe/Responsável de Equipe']||'', est:0, hj:0, ok:0 };
+    const p = getPrioridade(r);
+    if (p==='est') eqMap[cod].est++;
+    else if (p==='hj') eqMap[cod].hj++;
+    else eqMap[cod].ok++;
+  });
+  const sorted = Object.entries(eqMap).sort((a,b)=>b[1].est-a[1].est || b[1].hj-a[1].hj).slice(0,10);
+  let html = '';
+  sorted.forEach(([cod, d]) => {
+    const tipoEq = getTipoEquipe(cod);
+    const icon = tipoEq==='LB'?'🚗':tipoEq==='MM'?'🏍':'⚡';
+    html += `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:0.5px solid var(--gray-200);">
+      <span style="font-family:monospace;font-size:10px;color:#1565c0;background:#e8f4fd;border-radius:4px;padding:2px 6px;flex-shrink:0;">${icon} ${cod}</span>
+      <span style="font-size:11px;color:var(--text);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${d.lider}</span>
+      <span style="display:flex;gap:3px;flex-shrink:0;">
+        ${d.est ? `<span style="background:#fdecea;color:#c0392b;border-radius:10px;padding:2px 6px;font-size:9px;font-weight:700;">${d.est} est.</span>` : ''}
+        ${d.hj ? `<span style="background:#fff3e8;color:#c05010;border-radius:10px;padding:2px 6px;font-size:9px;font-weight:700;">${d.hj} hj</span>` : ''}
+        ${d.ok ? `<span style="background:#eaf7ef;color:#1a7a40;border-radius:10px;padding:2px 6px;font-size:9px;font-weight:700;">${d.ok} ok</span>` : ''}
+      </span>
+    </div>`;
+  });
+  document.getElementById('pg-equipes-criticas').innerHTML = `<div style="grid-column:1/-1;">${html}</div>`;
+}
+
+function pgRenderTabela() {
+  const search = (document.getElementById('pg-search')?.value || '').toLowerCase();
+  const dados = pgGetFiltrado();
+  const eqMap = {};
+  dados.forEach(r => {
+    const cod = r['Código Equipe'] || '';
+    if (!cod) return;
+    if (!eqMap[cod]) eqMap[cod] = { lider: r['Chefe/Responsável de Equipe']||'', est:0, hj:0, ok:0, reg:0, nreg:0 };
+    const p = getPrioridade(r);
+    if (p==='est') eqMap[cod].est++;
+    else if (p==='hj') eqMap[cod].hj++;
+    else eqMap[cod].ok++;
+    const t = getTipoOrdem(r);
+    if (t==='REG') eqMap[cod].reg++;
+    else if (t==='NREG') eqMap[cod].nreg++;
+  });
+  const rows = Object.entries(eqMap)
+    .filter(([cod,d]) => !search || cod.toLowerCase().includes(search) || d.lider.toLowerCase().includes(search))
+    .sort((a,b) => b[1].est-a[1].est || b[1].hj-a[1].hj);
+  let html = '';
+  rows.forEach(([cod,d], i) => {
+    const total = d.est+d.hj+d.ok;
+    const tipoEq = getTipoEquipe(cod);
+    const icon = tipoEq==='LB'?'🚗':tipoEq==='MM'?'🏍':'⚡';
+    const bg = i%2===0?'#fff':'#f8fafc';
+    const bordL = d.est>0?'border-left:3px solid #e53935':d.hj>0?'border-left:3px solid #ff9800':'border-left:3px solid #43a047';
+    html += `<tr style="background:${bg};${bordL};border-bottom:1px solid #e8edf5;">
+      <td style="padding:7px 12px;font-family:monospace;font-size:11px;color:#1565c0;white-space:nowrap;">${icon} ${cod}</td>
+      <td style="padding:7px 12px;font-size:12px;font-weight:600;">${d.lider}</td>
+      <td style="padding:7px 12px;font-size:11px;color:#8097b8;">${tipoEq==='LB'?'Carro':tipoEq==='MM'?'Moto':'—'}</td>
+      <td style="padding:7px 12px;text-align:center;font-weight:700;color:${d.est?'#c0392b':'#ccc'};">${d.est||'—'}</td>
+      <td style="padding:7px 12px;text-align:center;font-weight:700;color:${d.hj?'#d35400':'#ccc'};">${d.hj||'—'}</td>
+      <td style="padding:7px 12px;text-align:center;color:#1a7a40;">${d.ok}</td>
+      <td style="padding:7px 12px;text-align:center;font-weight:700;">${total}</td>
+      <td style="padding:7px 12px;text-align:center;color:#1565c0;">${d.reg}</td>
+      <td style="padding:7px 12px;text-align:center;color:#bf360c;">${d.nreg}</td>
+    </tr>`;
+  });
+  document.getElementById('pg-tabela-body').innerHTML = html || '<tr><td colspan="9" style="padding:20px;text-align:center;color:#8097b8;">Nenhuma equipe encontrada</td></tr>';
 }
 
 // ══ REGIÃO ══
