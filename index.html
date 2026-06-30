@@ -601,6 +601,13 @@
     <button class="pg-reg-btn active" id="pg-btn-sul" onclick="pgSetRegiao('Sul')">🌍 Sul</button>
     <button class="pg-reg-btn" id="pg-btn-cs" onclick="pgSetRegiao('CentroSul')">🌎 Centro Sul</button>
     <button class="pg-reg-btn" id="pg-btn-leste" onclick="pgSetRegiao('Leste')">🌏 Leste</button>
+    <div style="display:flex;align-items:center;gap:8px;">
+      <span style="font-size:11px;color:var(--gray-400);font-weight:700;text-transform:uppercase;letter-spacing:1px;">C. Serviço:</span>
+      <button class="pg-tipo-btn active" id="pg-cs-all" onclick="pgSetCS('')">Todos</button>
+      <button class="pg-tipo-btn" id="pg-cs-jz" onclick="pgSetCS('Juazeiro')">Juazeiro</button>
+      <button class="pg-tipo-btn" id="pg-cs-ml" onclick="pgSetCS('Milagres')">Milagres</button>
+      <button class="pg-tipo-btn" id="pg-cs-cp" onclick="pgSetCS('C. Sales')">C. Sales</button>
+    </div>
     <div style="margin-left:auto;display:flex;gap:8px;align-items:center;">
       <span style="font-size:11px;color:var(--gray-400);font-weight:700;text-transform:uppercase;letter-spacing:1px;">Tipo:</span>
       <button class="pg-tipo-btn active" id="pg-tipo-all" onclick="pgSetTipo('')">Todas</button>
@@ -1513,6 +1520,7 @@ function setTab(tab) {
 // ══ PAINEL GERENCIAL ══
 let pgRegiao = 'Sul';
 let pgTipo = '';
+let pgCS = '';
 let pgDados = [];
 let pgAtualizado = '';
 
@@ -1522,6 +1530,25 @@ function pgSetRegiao(r) {
   document.getElementById('pg-btn-cs').classList.toggle('active', r === 'CentroSul');
   document.getElementById('pg-btn-leste').classList.toggle('active', r === 'Leste');
   pgCarregar();
+}
+
+function pgGetCS(r) {
+  const cod = r['Código Equipe'] || '';
+  const muni = (r['Município'] || '').toUpperCase();
+  if (cod.includes('-JZ-') || cod.startsWith('JZ') || muni.includes('JUAZEIRO')) return 'Juazeiro';
+  if (cod.includes('-ML-') || cod.startsWith('ML') || muni.includes('MILAGRE')) return 'Milagres';
+  if (cod.includes('-CP-') || cod.startsWith('CP') || muni.includes('CAMPO')) return 'C. Sales';
+  return 'Outros';
+}
+
+function pgSetCS(cs) {
+  pgCS = cs;
+  ['all','jz','ml','cp'].forEach(k => document.getElementById('pg-cs-' + k).classList.remove('active'));
+  if (cs === '') document.getElementById('pg-cs-all').classList.add('active');
+  else if (cs === 'Juazeiro') document.getElementById('pg-cs-jz').classList.add('active');
+  else if (cs === 'Milagres') document.getElementById('pg-cs-ml').classList.add('active');
+  else if (cs === 'C. Sales') document.getElementById('pg-cs-cp').classList.add('active');
+  pgRender();
 }
 
 function pgSetTipo(t) {
@@ -1564,6 +1591,7 @@ function pgGetFiltrado() {
     const estado = (r['Estado TdC'] || '').trim().toLowerCase();
     if (EXCLUIR.includes(estado)) return false;
     if (pgTipo && getTipoOrdem(r) !== pgTipo) return false;
+    if (pgCS && pgGetCS(r) !== pgCS) return false;
     return true;
   });
 }
