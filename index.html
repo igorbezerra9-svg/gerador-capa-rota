@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Gerador de Capa de Rota — DESUL Sul</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
   :root {
     --navy: #0d1b2a;
@@ -345,6 +346,10 @@
   }
   .cr-footer strong { color: #1a2535; }
 
+  @keyframes pulse-dot {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: .4; transform: scale(.8); }
+  }
   .pg-reg-btn {
     padding:7px 16px;border:1.5px solid var(--gray-200);border-radius:20px;
     background:var(--white);color:var(--gray-700);font-size:12px;font-weight:700;cursor:pointer;
@@ -432,12 +437,26 @@
           style="flex:1;padding:14px;background:linear-gradient(135deg,#1a0d2a,#3b2455);color:#c8a0e8;border:none;border-radius:12px;font-size:15px;font-weight:800;cursor:pointer;">
           🌎 Centro Sul
         </button>
+        <button onclick="confirmarRegiao('Leste')"
+          style="flex:1;padding:14px;background:linear-gradient(135deg,#0d2a1a,#245524);color:#a0e8b0;border:none;border-radius:12px;font-size:15px;font-weight:800;cursor:pointer;">
+          🌏 Leste
+        </button>
       </div>
       <button onclick="confirmarRegiao('')"
         style="width:100%;margin-top:10px;padding:10px;background:transparent;border:1.5px solid #e4e8ef;border-radius:10px;font-size:13px;color:#8097b8;cursor:pointer;">
         Sem região (só usar localmente)
       </button>
     </div>
+  </div>
+
+  <!-- Banner de atualização -->
+  <div id="update-banner" style="display:none;background:linear-gradient(135deg,#1a7a40,#0d5c30);color:#fff;padding:12px 20px;border-radius:12px;margin-bottom:12px;display:none;align-items:center;gap:12px;box-shadow:0 4px 16px rgba(26,122,64,.3);cursor:pointer;" onclick="recarregarRegiao()">
+    <span style="font-size:20px;animation:pulse-dot 1s infinite;">🔄</span>
+    <div style="flex:1;">
+      <div style="font-weight:700;font-size:14px;" id="banner-titulo">Nova atualização disponível</div>
+      <div style="font-size:12px;opacity:.85;" id="banner-sub">Clique aqui para recarregar</div>
+    </div>
+    <button onclick="event.stopPropagation();fecharBanner()" style="background:rgba(255,255,255,.2);border:none;color:#fff;border-radius:8px;padding:5px 12px;font-size:12px;cursor:pointer;">✕</button>
   </div>
 
   <!-- Cloud panel -->
@@ -469,6 +488,17 @@
             <div id="ts-cs" style="font-size:10px;color:#8097b8;margin-top:1px;">verificando...</div>
           </div>
           <button id="btn-dl-cs" onclick="baixarExcelNuvem('CentroSul')" title="Baixar Excel"
+            style="display:none;background:var(--navy);color:var(--accent);border:none;border-radius:8px;padding:6px 10px;font-size:13px;cursor:pointer;flex-shrink:0;">
+            ⬇
+          </button>
+        </div>
+        <div style="flex:1;display:flex;align-items:center;gap:8px;background:var(--gray-100);border:1.5px solid var(--gray-200);border-radius:12px;padding:12px 16px;transition:all .15s;" id="btn-cloud-leste">
+          <span style="font-size:16px;cursor:pointer;" onclick="carregarNuvem('Leste')">🌏</span>
+          <div style="flex:1;cursor:pointer;" onclick="carregarNuvem('Leste')">
+            <div style="font-weight:700;font-size:13px;">Leste</div>
+            <div id="ts-leste" style="font-size:10px;color:#8097b8;margin-top:1px;">verificando...</div>
+          </div>
+          <button id="btn-dl-leste" onclick="baixarExcelNuvem('Leste')" title="Baixar Excel"
             style="display:none;background:var(--navy);color:var(--accent);border:none;border-radius:8px;padding:6px 10px;font-size:13px;cursor:pointer;flex-shrink:0;">
             ⬇
           </button>
@@ -569,6 +599,7 @@
     <span style="font-size:11px;color:var(--gray-400);font-weight:700;text-transform:uppercase;letter-spacing:1px;">Região:</span>
     <button class="pg-reg-btn active" id="pg-btn-sul" onclick="pgSetRegiao('Sul')">🌍 Sul</button>
     <button class="pg-reg-btn" id="pg-btn-cs" onclick="pgSetRegiao('CentroSul')">🌎 Centro Sul</button>
+    <button class="pg-reg-btn" id="pg-btn-leste" onclick="pgSetRegiao('Leste')">🌏 Leste</button>
     <div style="margin-left:auto;display:flex;gap:8px;align-items:center;">
       <span style="font-size:11px;color:var(--gray-400);font-weight:700;text-transform:uppercase;letter-spacing:1px;">Tipo:</span>
       <button class="pg-tipo-btn active" id="pg-tipo-all" onclick="pgSetTipo('')">Todas</button>
@@ -1488,6 +1519,7 @@ function pgSetRegiao(r) {
   pgRegiao = r;
   document.getElementById('pg-btn-sul').classList.toggle('active', r === 'Sul');
   document.getElementById('pg-btn-cs').classList.toggle('active', r === 'CentroSul');
+  document.getElementById('pg-btn-leste').classList.toggle('active', r === 'Leste');
   pgCarregar();
 }
 
@@ -1543,6 +1575,8 @@ function pgRender() {
   pgRenderEquipesCriticas(dados);
   pgRenderTabela();
   document.getElementById('pg-atualizado').textContent = pgAtualizado;
+  const pgUpd = document.getElementById('pg-last-update');
+  if (pgUpd) pgUpd.textContent = pgAtualizado;
 }
 
 function pgRenderKPIs(dados) {
@@ -1908,6 +1942,7 @@ function confirmarRegiao(regiao) {
   // Destacar botão da região
   document.getElementById('btn-cloud-sul').classList.toggle('ativo', regiao === 'Sul');
   document.getElementById('btn-cloud-cs').classList.toggle('ativo', regiao === 'CentroSul');
+  document.getElementById('btn-cloud-leste').classList.toggle('ativo', regiao === 'Leste');
   // Atualizar botões de publicar no header
   if (regiao) {
     showToast('✔ ' + allData.length + ' registros — clique em ☁ ' + (regiao === 'Sul' ? 'Sul' : 'C.Sul') + ' pra publicar', 4000);
@@ -1946,9 +1981,14 @@ async function checarTimestamps() {
         document.getElementById('ts-cs').textContent = 'Atualizado ' + label;
         document.getElementById('btn-dl-cs').style.display = 'block';
       }
+      if (r.regiao === 'Leste') {
+        document.getElementById('ts-leste').textContent = 'Atualizado ' + label;
+        document.getElementById('btn-dl-leste').style.display = 'block';
+      }
     });
     if (!rows.find(r => r.regiao === 'Sul')) document.getElementById('ts-sul').textContent = 'Sem dados';
     if (!rows.find(r => r.regiao === 'CentroSul')) document.getElementById('ts-cs').textContent = 'Sem dados';
+    if (!rows.find(r => r.regiao === 'Leste')) document.getElementById('ts-leste').textContent = 'Sem dados';
   } catch(e) {
     document.getElementById('ts-sul').textContent = 'Erro ao verificar';
     document.getElementById('ts-cs').textContent = 'Erro ao verificar';
@@ -1994,13 +2034,76 @@ async function carregarNuvem(regiao) {
     // Mark active button
     document.getElementById('btn-cloud-sul').classList.toggle('ativo', regiao === 'Sul');
     document.getElementById('btn-cloud-cs').classList.toggle('ativo', regiao === 'CentroSul');
+    document.getElementById('btn-cloud-leste').classList.toggle('ativo', regiao === 'Leste');
   } catch(e) {
     showToast('Erro: ' + e.message, 4000);
   }
 }
 
+// ══ REALTIME ══
+let supabaseClient = null;
+let regiaoComAtualizacao = null;
+
+function iniciarRealtime() {
+  try {
+    supabaseClient = supabase.createClient(SB_URL, SB_KEY);
+    supabaseClient
+      .channel('snapshots-changes')
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'snapshots'
+      }, payload => {
+        const regiao = payload.new?.regiao;
+        if (!regiao) return;
+        regiaoComAtualizacao = regiao;
+        // Atualiza timestamp no botão
+        checarTimestamps();
+        // Mostra banner só se tiver dados carregados
+        const banner = document.getElementById('update-banner');
+        document.getElementById('banner-titulo').textContent = '🔄 ' + regiao + ' foi atualizado!';
+        document.getElementById('banner-sub').textContent = 'Clique aqui para recarregar com os dados mais recentes';
+        banner.style.display = 'flex';
+      })
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'snapshots'
+      }, payload => {
+        const regiao = payload.new?.regiao;
+        if (!regiao) return;
+        regiaoComAtualizacao = regiao;
+        checarTimestamps();
+        const banner = document.getElementById('update-banner');
+        document.getElementById('banner-titulo').textContent = '🆕 ' + regiao + ' publicado pela primeira vez!';
+        document.getElementById('banner-sub').textContent = 'Clique aqui para carregar os dados';
+        banner.style.display = 'flex';
+      })
+      .subscribe();
+  } catch(e) {
+    console.log('Realtime não disponível:', e.message);
+  }
+}
+
+function recarregarRegiao() {
+  fecharBanner();
+  if (regiaoComAtualizacao) {
+    carregarNuvem(regiaoComAtualizacao);
+    // Se painel estiver aberto na mesma região, atualiza também
+    if (pgDados.length && pgRegiao === regiaoComAtualizacao) pgCarregar();
+  }
+}
+
+function fecharBanner() {
+  document.getElementById('update-banner').style.display = 'none';
+  regiaoComAtualizacao = null;
+}
+
 // Verificar timestamps ao carregar a página
-window.addEventListener('DOMContentLoaded', checarTimestamps);
+window.addEventListener('DOMContentLoaded', () => {
+  checarTimestamps();
+  iniciarRealtime();
+});
 
 function resetApp() {
   document.getElementById('upload-zone').style.display = 'block';
