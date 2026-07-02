@@ -545,6 +545,17 @@
           </select>
         </div>
         <div class="cp-group">
+          <label>Supervisor</label>
+          <select id="sel-supervisor" onchange="atualizarEquipes()">
+            <option value="">Todos</option>
+            <option value="Cirllek Nepomuceno">Cirllek Nepomuceno</option>
+            <option value="Cicera Maria">Cicera Maria</option>
+            <option value="Jorge Luis">Jorge Luis</option>
+            <option value="Amanda Vasques">Amanda Vasques</option>
+            <option value="Helenilton Silva">Helenilton Silva</option>
+          </select>
+        </div>
+        <div class="cp-group">
           <label>Estado TdC</label>
           <select id="sel-estado">
             <option value="">Todos</option>
@@ -607,6 +618,18 @@
       <button class="pg-tipo-btn" id="pg-cs-jz" onclick="pgSetCS('Juazeiro')">Juazeiro</button>
       <button class="pg-tipo-btn" id="pg-cs-ml" onclick="pgSetCS('Milagres')">Milagres</button>
       <button class="pg-tipo-btn" id="pg-cs-cp" onclick="pgSetCS('C. Sales')">C. Sales</button>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;">
+      <span style="font-size:11px;color:var(--gray-400);font-weight:700;text-transform:uppercase;letter-spacing:1px;">Supervisor:</span>
+      <select id="pg-sel-sup" onchange="pgSetSupervisor(this.value)"
+        style="padding:5px 12px;border:1.5px solid var(--gray-200);border-radius:20px;font-size:12px;font-weight:600;color:var(--text);background:var(--white);cursor:pointer;">
+        <option value="">Todos</option>
+        <option value="Cirllek Nepomuceno">Cirllek Nepomuceno</option>
+        <option value="Cicera Maria">Cicera Maria</option>
+        <option value="Jorge Luis">Jorge Luis</option>
+        <option value="Amanda Vasques">Amanda Vasques</option>
+        <option value="Helenilton Silva">Helenilton Silva</option>
+      </select>
     </div>
     <div style="margin-left:auto;display:flex;gap:8px;align-items:center;">
       <span style="font-size:11px;color:var(--gray-400);font-weight:700;text-transform:uppercase;letter-spacing:1px;">Tipo:</span>
@@ -798,6 +821,66 @@ function setupUI() {
   atualizarEquipes();
 }
 
+// ══ MAPA DE SUPERVISORES ══
+const SUPERVISOR_MAP = {
+  'CPS-LB-11B': 'Cirllek Nepomuceno',
+  'CPE-LB-13B': 'Cirllek Nepomuceno',
+  'CPB-LB-14B': 'Cirllek Nepomuceno',
+  'CPR-LB-12B': 'Cirllek Nepomuceno',
+  'CPS-MM-11B': 'Cirllek Nepomuceno',
+  'CPE-MM-14B': 'Cirllek Nepomuceno',
+  'CPB-MM-15B': 'Cirllek Nepomuceno',
+  'CPP-MM-13B': 'Cirllek Nepomuceno',
+  'JZN-LB-12B': 'Cicera Maria',
+  'JZN-LB-13B': 'Cicera Maria',
+  'JZN-LB-14B': 'Cicera Maria',
+  'JZN-LB-15B': 'Cicera Maria',
+  'JZN-LB-17B': 'Cicera Maria',
+  'JZC-LB-20B': 'Cicera Maria',
+  'JZC-LB-21B': 'Cicera Maria',
+  'JZC-LB-22B': 'Cicera Maria',
+  'CPN-LB-28B': 'Cicera Maria',
+  'JZN-MM-13B': 'Jorge Luis',
+  'JZN-MM-14B': 'Jorge Luis',
+  'JZN-MM-15B': 'Jorge Luis',
+  'JZN-MM-21B': 'Jorge Luis',
+  'JZN-MM-23B': 'Jorge Luis',
+  'JZC-MM-11B': 'Jorge Luis',
+  'JZC-MM-17B': 'Jorge Luis',
+  'JZB-MM-16B': 'Jorge Luis',
+  'JZB-MM-22B': 'Jorge Luis',
+  'MLJ-MM-12B': 'Jorge Luis',
+  'JZU-MM-19B': 'Jorge Luis',
+  'CPN-MM-18B': 'Jorge Luis',
+  'CPF-MM-24B': 'Jorge Luis',
+  'JZN-MM-12B': 'Jorge Luis',
+  'JZN-LB-11B': 'Amanda Vasques',
+  'JZN-LB-18B': 'Amanda Vasques',
+  'JZN-LB-19B': 'Amanda Vasques',
+  'JZB-LB-23B': 'Amanda Vasques',
+  'JZB-LB-24B': 'Amanda Vasques',
+  'MLJ-LB-16B': 'Helenilton Silva',
+  'JZU-LB-26B': 'Amanda Vasques',
+  'JZB-LB-25B': 'Amanda Vasques',
+  'MLG-LB-11B': 'Helenilton Silva',
+  'MLV-LB-12B': 'Helenilton Silva',
+  'MLV-LB-13B': 'Helenilton Silva',
+  'MLS-LB-14B': 'Helenilton Silva',
+  'MLM-LB-18B': 'Helenilton Silva',
+  'MLA-LB-16B': 'Helenilton Silva',
+  'MLP-LB-19B': 'Helenilton Silva',
+  'MLG-MM-11B': 'Helenilton Silva',
+  'MLV-MM-12B': 'Helenilton Silva',
+  'MLS-MM-13B': 'Helenilton Silva',
+  'MLM-MM-14B': 'Helenilton Silva',
+  'MLA-MM-15B': 'Helenilton Silva',
+  'MLP-MM-16B': 'Helenilton Silva',
+};
+
+function getSupervisor(cod) {
+  return SUPERVISOR_MAP[cod] || '';
+}
+
 function getTipoEquipe(cod) {
   if (!cod) return '';
   if (/-LB-/.test(cod)) return 'LB';
@@ -809,6 +892,7 @@ function atualizarEquipes() {
   const cs = document.getElementById('sel-cs').value;
   const estado = document.getElementById('sel-estado').value;
   const tipo = document.getElementById('sel-tipo-equipe')?.value || '';
+  const supervisor = document.getElementById('sel-supervisor')?.value || '';
   const selEq = document.getElementById('sel-equipe');
   selEq.innerHTML = '<option value="__todas__">Gerar para TODAS as equipes</option>';
 
@@ -821,6 +905,7 @@ function atualizarEquipes() {
       if (!cod.startsWith(pref)) return;
     }
     if (tipo && getTipoEquipe(cod) !== tipo) return;
+    if (supervisor && getSupervisor(cod) !== supervisor) return;
     if (estado && (r['Estado TdC'] || '').trim() !== estado) return;
     if (!eqMap[cod]) eqMap[cod] = r['Chefe/Responsável de Equipe'] || '';
     else if (!eqMap[cod] && r['Chefe/Responsável de Equipe']) eqMap[cod] = r['Chefe/Responsável de Equipe'];
@@ -872,6 +957,7 @@ function getFiltered() {
       if (!cod.startsWith(pref)) return false;
     }
     if (tipo && getTipoEquipe(cod) !== tipo) return false;
+    if (supervisor && getSupervisor(cod) !== supervisor) return false;
     if (eq && eq !== '__todas__' && cod !== eq) return false;
     if (estado && (r['Estado TdC'] || '').trim() !== estado) return false;
     return true;
@@ -1521,6 +1607,7 @@ function setTab(tab) {
 let pgRegiao = 'Sul';
 let pgTipo = '';
 let pgCS = '';
+let pgSupervisor = '';
 let pgDados = [];
 let pgAtualizado = '';
 
@@ -1539,6 +1626,11 @@ function pgGetCS(r) {
   if (cod.includes('-ML-') || cod.startsWith('ML') || muni.includes('MILAGRE')) return 'Milagres';
   if (cod.includes('-CP-') || cod.startsWith('CP') || muni.includes('CAMPO')) return 'C. Sales';
   return 'Outros';
+}
+
+function pgSetSupervisor(s) {
+  pgSupervisor = s;
+  pgRender();
 }
 
 function pgSetCS(cs) {
@@ -1592,6 +1684,7 @@ function pgGetFiltrado() {
     if (EXCLUIR.includes(estado)) return false;
     if (pgTipo && getTipoOrdem(r) !== pgTipo) return false;
     if (pgCS && pgGetCS(r) !== pgCS) return false;
+    if (pgSupervisor && getSupervisor(r['Código Equipe']||'') !== pgSupervisor) return false;
     return true;
   });
 }
