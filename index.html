@@ -946,6 +946,7 @@ function getFiltered() {
   const eq = document.getElementById('sel-equipe').value;
   const estado = document.getElementById('sel-estado').value;
   const tipo = document.getElementById('sel-tipo-equipe')?.value || '';
+  const supervisor = document.getElementById('sel-supervisor')?.value || '';
 
   const EXCLUIR_ESTADOS = ['programáveis', 'a reprogramar'];
   return allData.filter(r => {
