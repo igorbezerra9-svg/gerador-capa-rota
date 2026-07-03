@@ -1603,6 +1603,12 @@ function gerarHTMLCapa(cod, lider, rows, dataHoje, est, hj, ok, modo) {
 
   <!-- VIEW MAPA -->
   <div id="v-mapa" style="display:none;margin-bottom:14px;">
+    <div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap;">
+      <button onclick="filtrarMapa('')"    id="mfbtn-all"  style="padding:5px 14px;border:none;border-radius:20px;font-size:12px;font-weight:700;cursor:pointer;background:#0d1b2a;color:#e8a020;">📍 Todos</button>
+      <button onclick="filtrarMapa('est')" id="mfbtn-est"  style="padding:5px 14px;border:none;border-radius:20px;font-size:12px;font-weight:700;cursor:pointer;background:#fdecea;color:#c0392b;">⚠ Estouradas</button>
+      <button onclick="filtrarMapa('hj')"  id="mfbtn-hj"   style="padding:5px 14px;border:none;border-radius:20px;font-size:12px;font-weight:700;cursor:pointer;background:#fff3e8;color:#d35400;">⏰ Vencem hoje</button>
+      <button onclick="filtrarMapa('ok')"  id="mfbtn-ok"   style="padding:5px 14px;border:none;border-radius:20px;font-size:12px;font-weight:700;cursor:pointer;background:#eaf7ef;color:#1a7a40;">✓ No prazo</button>
+    </div>
     <div id="mapa-container" style="height:480px;border-radius:14px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.1);"></div>
     <div id="mapa-offline" style="display:none;background:#fff;border-radius:14px;padding:12px;box-shadow:0 2px 12px rgba(0,0,0,.08);">
       <div style="font-size:11px;color:#8097b8;text-align:center;margin-bottom:8px;">📡 Sem internet — modo offline</div>
@@ -1669,21 +1675,25 @@ function iniciarMapa() {
   img.src = 'https://tile.openstreetmap.org/0/0/0.png?_=' + Date.now();
 }
 
+var _mapaObj = null;
+var _mapaMarkers = [];
+
 function iniciarMapaOnline() {
   var container = document.getElementById('mapa-container');
   container.style.display = 'block';
-  var map = L.map('mapa-container');
+  _mapaObj = L.map('mapa-container');
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: '© OpenStreetMap'
-  }).addTo(map);
-  var markers = [];
+  }).addTo(_mapaObj);
+  _mapaMarkers = [];
   PINS.forEach(function(p) {
     var icon = L.divIcon({
       className: '',
       html: '<div style="background:' + p.color + ';color:#fff;font-family:monospace;font-weight:900;font-size:11px;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.4);">' + p.i + '</div>',
       iconSize: [28,28], iconAnchor: [14,14], popupAnchor: [0,-16]
     });
-    var m = L.marker([p.lat, p.lng], {icon: icon}).addTo(map);
+    var m = L.marker([p.lat, p.lng], {icon: icon}).addTo(_mapaObj);
+    m._prio = p.prio;
     var prioLabel = p.prio==='est' ? '⚠ Estourada' : p.prio==='hj' ? '⏰ Vence hoje' : '✓ No prazo';
     m.bindPopup(
       '<div style="font-family:Segoe UI,sans-serif;min-width:210px;">'
@@ -1698,11 +1708,36 @@ function iniciarMapaOnline() {
       + '</div></div>',
       {maxWidth: 270}
     );
-    markers.push(m);
+    _mapaMarkers.push(m);
   });
-  var group = L.featureGroup(markers);
-  map.fitBounds(group.getBounds().pad(0.15));
-  setTimeout(function() { map.invalidateSize(); }, 200);
+  var group = L.featureGroup(_mapaMarkers);
+  _mapaObj.fitBounds(group.getBounds().pad(0.15));
+  setTimeout(function() { _mapaObj.invalidateSize(); }, 200);
+}
+
+function filtrarMapa(prio) {
+  // Update button styles
+  ['all','est','hj','ok'].forEach(function(k) {
+    var btn = document.getElementById('mfbtn-' + k);
+    if (!btn) return;
+    var active = (prio === '' && k === 'all') || prio === k;
+    btn.style.opacity = active ? '1' : '0.45';
+    btn.style.transform = active ? 'scale(1.05)' : 'scale(1)';
+  });
+  // Show/hide markers
+  _mapaMarkers.forEach(function(m) {
+    if (!prio || m._prio === prio) {
+      m.addTo(_mapaObj);
+    } else {
+      m.remove();
+    }
+  });
+  // Fit to visible markers
+  var visible = _mapaMarkers.filter(function(m) { return !prio || m._prio === prio; });
+  if (visible.length > 0 && _mapaObj) {
+    var group = L.featureGroup(visible);
+    _mapaObj.fitBounds(group.getBounds().pad(0.2));
+  }
 }
 
 function iniciarMapaOffline() {
