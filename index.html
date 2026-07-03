@@ -1677,61 +1677,144 @@ function iniciarMapa() {
 
 var _mapaObj = null;
 var _mapaMarkers = [];
+var _rotaLine = null;
+var _mapaFiltro = '';
+
+function makeIcon(color, num, pulsing) {
+  var pulse = pulsing
+    ? 'animation:pulse-pin 1s infinite;'
+    : '';
+  return L.divIcon({
+    className: '',
+    html: '<div style="background:' + color + ';color:#fff;font-family:monospace;font-weight:900;font-size:11px;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.4);' + pulse + '">' + num + '</div>',
+    iconSize: [28,28], iconAnchor: [14,14], popupAnchor: [0,-16]
+  });
+}
+
+function abrirPin(idx) {
+  if (idx < 0 || idx >= _mapaMarkers.length) return;
+  // Reset all icons to normal
+  _mapaMarkers.forEach(function(m, i) {
+    m.setIcon(makeIcon(m._color, m._num, false));
+  });
+  // Highlight next pin if exists
+  if (idx + 1 < _mapaMarkers.length) {
+    var next = _mapaMarkers[idx + 1];
+    next.setIcon(makeIcon(next._color, next._num, true));
+  }
+  // Pan to current and open popup
+  _mapaObj.panTo(_mapaMarkers[idx].getLatLng());
+  _mapaMarkers[idx].openPopup();
+}
 
 function iniciarMapaOnline() {
   var container = document.getElementById('mapa-container');
   container.style.display = 'block';
+
+  // Add pulse animation style
+  if (!document.getElementById('pulse-style')) {
+    var s = document.createElement('style');
+    s.id = 'pulse-style';
+    s.textContent = '@keyframes pulse-pin { 0%,100%{transform:scale(1);box-shadow:0 0 0 0 rgba(232,160,32,.6)} 50%{transform:scale(1.25);box-shadow:0 0 0 8px rgba(232,160,32,0)} }';
+    document.head.appendChild(s);
+  }
+
   _mapaObj = L.map('mapa-container');
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: '© OpenStreetMap'
   }).addTo(_mapaObj);
+
+  // Draw route line
+  if (PINS.length > 1) {
+    var latlngs = PINS.map(function(p) { return [p.lat, p.lng]; });
+    _rotaLine = L.polyline(latlngs, {
+      color: '#e8a020', weight: 2.5, opacity: 0.6, dashArray: '6,5'
+    }).addTo(_mapaObj);
+  }
+
   _mapaMarkers = [];
-  PINS.forEach(function(p) {
-    var icon = L.divIcon({
-      className: '',
-      html: '<div style="background:' + p.color + ';color:#fff;font-family:monospace;font-weight:900;font-size:11px;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.4);">' + p.i + '</div>',
-      iconSize: [28,28], iconAnchor: [14,14], popupAnchor: [0,-16]
-    });
-    var m = L.marker([p.lat, p.lng], {icon: icon}).addTo(_mapaObj);
-    m._prio = p.prio;
+  PINS.forEach(function(p, idx) {
+    var m = L.marker([p.lat, p.lng], { icon: makeIcon(p.color, p.i, false) }).addTo(_mapaObj);
+    m._prio  = p.prio;
+    m._color = p.color;
+    m._num   = p.i;
+    m._idx   = idx;
     var prioLabel = p.prio==='est' ? '⚠ Estourada' : p.prio==='hj' ? '⏰ Vence hoje' : '✓ No prazo';
+    var prevBtn = idx > 0
+      ? '<button onclick="abrirPin(' + (idx-1) + ')" style="flex:1;padding:6px;border:none;background:#e4e8ef;color:#1a2535;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;">← #' + (idx) + '</button>'
+      : '<span style="flex:1;"></span>';
+    var nextBtn = idx < PINS.length - 1
+      ? '<button onclick="abrirPin(' + (idx+1) + ')" style="flex:1;padding:6px;border:none;background:#0d1b2a;color:#e8a020;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;">Próximo #' + (idx+2) + ' →</button>'
+      : '<span style="flex:1;text-align:center;font-size:11px;color:#1a7a40;font-weight:700;">✓ Último ponto</span>';
     m.bindPopup(
-      '<div style="font-family:Segoe UI,sans-serif;min-width:210px;">'
+      '<div style="font-family:Segoe UI,sans-serif;min-width:220px;">'
+      + '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">'
+      + '<div style="background:' + p.color + ';color:#fff;font-family:monospace;font-weight:900;width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;">' + p.i + '</div>'
       + '<div style="font-family:monospace;color:#1565c0;font-weight:700;font-size:12px;">' + p.ns + '</div>'
-      + '<div style="font-size:13px;font-weight:700;color:#1a2535;margin:4px 0 2px;">' + p.cliente + '</div>'
+      + '</div>'
+      + '<div style="font-size:13px;font-weight:700;color:#1a2535;margin-bottom:2px;">' + p.cliente + '</div>'
       + '<div style="font-size:10px;color:#8097b8;margin-bottom:4px;">' + p.tipo + '</div>'
       + '<div style="font-size:11px;color:#2a3a50;margin-bottom:6px;">' + p.end + '</div>'
       + '<div style="font-size:11px;font-weight:700;color:' + p.color + ';margin-bottom:8px;">' + prioLabel + ' · ' + p.prazo + '</div>'
-      + '<div style="display:flex;gap:6px;">'
+      + '<div style="display:flex;gap:6px;margin-bottom:8px;">'
       + '<a href="https://www.google.com/maps?q=' + p.lat + ',' + p.lng + '" target="_blank" style="flex:1;text-align:center;background:#1565c0;color:#fff;padding:5px;border-radius:6px;font-size:11px;font-weight:700;text-decoration:none;">📍 Maps</a>'
       + '<a href="https://waze.com/ul?ll=' + p.lat + ',' + p.lng + '&navigate=yes" target="_blank" style="flex:1;text-align:center;background:#06c0d9;color:#fff;padding:5px;border-radius:6px;font-size:11px;font-weight:700;text-decoration:none;">🗺 Waze</a>'
-      + '</div></div>',
-      {maxWidth: 270}
+      + '</div>'
+      + '<div style="display:flex;gap:6px;">' + prevBtn + nextBtn + '</div>'
+      + '</div>',
+      {maxWidth: 280}
     );
+    // When popup opens, pulse the next marker
+    m.on('popupopen', function() {
+      _mapaMarkers.forEach(function(mk, i) {
+        mk.setIcon(makeIcon(mk._color, mk._num, i === idx + 1));
+      });
+    });
+    m.on('popupclose', function() {
+      _mapaMarkers.forEach(function(mk) {
+        mk.setIcon(makeIcon(mk._color, mk._num, false));
+      });
+    });
     _mapaMarkers.push(m);
   });
+
   var group = L.featureGroup(_mapaMarkers);
   _mapaObj.fitBounds(group.getBounds().pad(0.15));
   setTimeout(function() { _mapaObj.invalidateSize(); }, 200);
 }
 
 function filtrarMapa(prio) {
+  _mapaFiltro = prio;
   // Update button styles
   ['all','est','hj','ok'].forEach(function(k) {
     var btn = document.getElementById('mfbtn-' + k);
     if (!btn) return;
     var active = (prio === '' && k === 'all') || prio === k;
     btn.style.opacity = active ? '1' : '0.45';
+    btn.style.fontWeight = active ? '800' : '700';
     btn.style.transform = active ? 'scale(1.05)' : 'scale(1)';
   });
-  // Show/hide markers
+  // Reset all pins to normal
+  _mapaMarkers.forEach(function(m) {
+    m.setIcon(makeIcon(m._color, m._num, false));
+  });
+  // Show/hide markers and route line
   _mapaMarkers.forEach(function(m) {
     if (!prio || m._prio === prio) {
       m.addTo(_mapaObj);
     } else {
       m.remove();
+      m.closePopup();
     }
   });
+  // Show/hide route line
+  if (_rotaLine) {
+    if (prio) {
+      _rotaLine.setStyle({opacity: 0.15});
+    } else {
+      _rotaLine.setStyle({opacity: 0.6});
+    }
+  }
   // Fit to visible markers
   var visible = _mapaMarkers.filter(function(m) { return !prio || m._prio === prio; });
   if (visible.length > 0 && _mapaObj) {
