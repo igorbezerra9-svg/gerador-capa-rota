@@ -362,6 +362,31 @@
   }
   .pg-tipo-btn.active { background:var(--navy);color:var(--accent);border-color:var(--navy); }
 
+  .pg-multisel { position:relative; display:inline-block; }
+  .pg-multisel-btn {
+    padding:5px 12px;border:1.5px solid var(--gray-200);border-radius:20px;
+    background:var(--white);color:var(--text);font-size:12px;font-weight:600;cursor:pointer;
+    display:flex;align-items:center;gap:6px;
+  }
+  .pg-multisel-btn.active { background:var(--navy);color:var(--accent);border-color:var(--navy); }
+  .pg-multisel-btn::after { content:'▾'; font-size:9px; opacity:.7; }
+  .pg-multisel-menu {
+    position:absolute;top:calc(100% + 6px);left:0;z-index:50;min-width:200px;
+    background:var(--white);border:1px solid var(--gray-200);border-radius:10px;
+    box-shadow:0 8px 24px rgba(0,0,0,.12);padding:6px;
+  }
+  .pg-multisel-menu label {
+    display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;
+    font-size:12px;font-weight:600;color:var(--text);cursor:pointer;
+  }
+  .pg-multisel-menu label:hover { background:var(--gray-50,#f4f6f9); }
+  .pg-multisel-menu label input { cursor:pointer; }
+  .pg-multisel-actions {
+    display:flex;justify-content:space-between;gap:6px;padding:4px 8px 2px;
+    border-top:1px solid var(--gray-200);margin-top:4px;
+  }
+  .pg-multisel-actions a { font-size:11px;color:var(--navy);font-weight:700;cursor:pointer;text-decoration:none; }
+
   .btn-cloud {
     flex:1; min-width:160px;
     background:var(--gray-100); border:1.5px solid var(--gray-200);
@@ -621,15 +646,20 @@
     </div>
     <div style="display:flex;align-items:center;gap:8px;">
       <span style="font-size:11px;color:var(--gray-400);font-weight:700;text-transform:uppercase;letter-spacing:1px;">Supervisor:</span>
-      <select id="pg-sel-sup" onchange="pgSetSupervisor(this.value)"
-        style="padding:5px 12px;border:1.5px solid var(--gray-200);border-radius:20px;font-size:12px;font-weight:600;color:var(--text);background:var(--white);cursor:pointer;">
-        <option value="">Todos</option>
-        <option value="Cirllek Nepomuceno">Cirllek Nepomuceno</option>
-        <option value="Cicera Maria">Cicera Maria</option>
-        <option value="Jorge Luis">Jorge Luis</option>
-        <option value="Amanda Vasques">Amanda Vasques</option>
-        <option value="Helenilton Silva">Helenilton Silva</option>
-      </select>
+      <div class="pg-multisel" id="pg-sup-wrap">
+        <button type="button" class="pg-multisel-btn" id="pg-sup-btn" onclick="pgToggleSupDropdown(event)">Todos</button>
+        <div class="pg-multisel-menu" id="pg-sup-menu" style="display:none;">
+          <label><input type="checkbox" value="Cirllek Nepomuceno" onchange="pgToggleSupervisor(this)"> Cirllek Nepomuceno</label>
+          <label><input type="checkbox" value="Cicera Maria" onchange="pgToggleSupervisor(this)"> Cicera Maria</label>
+          <label><input type="checkbox" value="Jorge Luis" onchange="pgToggleSupervisor(this)"> Jorge Luis</label>
+          <label><input type="checkbox" value="Amanda Vasques" onchange="pgToggleSupervisor(this)"> Amanda Vasques</label>
+          <label><input type="checkbox" value="Helenilton Silva" onchange="pgToggleSupervisor(this)"> Helenilton Silva</label>
+          <div class="pg-multisel-actions">
+            <a onclick="pgSelectAllSupervisores()">Marcar todos</a>
+            <a onclick="pgClearSupervisores()">Limpar</a>
+          </div>
+        </div>
+      </div>
     </div>
     <div style="margin-left:auto;display:flex;gap:8px;align-items:center;">
       <span style="font-size:11px;color:var(--gray-400);font-weight:700;text-transform:uppercase;letter-spacing:1px;">Tipo:</span>
@@ -1608,7 +1638,7 @@ function setTab(tab) {
 let pgRegiao = 'Sul';
 let pgTipo = '';
 let pgCS = '';
-let pgSupervisor = '';
+let pgSupervisores = [];
 let pgDados = [];
 let pgAtualizado = '';
 
@@ -1629,10 +1659,51 @@ function pgGetCS(r) {
   return 'Outros';
 }
 
-function pgSetSupervisor(s) {
-  pgSupervisor = s;
+function pgToggleSupDropdown(e) {
+  if (e) e.stopPropagation();
+  const menu = document.getElementById('pg-sup-menu');
+  menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+}
+
+function pgToggleSupervisor(cb) {
+  const v = cb.value;
+  if (cb.checked) {
+    if (!pgSupervisores.includes(v)) pgSupervisores.push(v);
+  } else {
+    pgSupervisores = pgSupervisores.filter(s => s !== v);
+  }
+  pgUpdateSupBtnLabel();
   pgRender();
 }
+
+function pgSelectAllSupervisores() {
+  const boxes = document.querySelectorAll('#pg-sup-menu input[type=checkbox]');
+  pgSupervisores = [...boxes].map(b => { b.checked = true; return b.value; });
+  pgUpdateSupBtnLabel();
+  pgRender();
+}
+
+function pgClearSupervisores() {
+  const boxes = document.querySelectorAll('#pg-sup-menu input[type=checkbox]');
+  boxes.forEach(b => b.checked = false);
+  pgSupervisores = [];
+  pgUpdateSupBtnLabel();
+  pgRender();
+}
+
+function pgUpdateSupBtnLabel() {
+  const btn = document.getElementById('pg-sup-btn');
+  if (!btn) return;
+  if (pgSupervisores.length === 0) { btn.textContent = 'Todos'; btn.classList.remove('active'); }
+  else if (pgSupervisores.length === 1) { btn.textContent = pgSupervisores[0]; btn.classList.add('active'); }
+  else { btn.textContent = pgSupervisores.length + ' selecionados'; btn.classList.add('active'); }
+}
+
+document.addEventListener('click', function(e) {
+  const wrap = document.getElementById('pg-sup-wrap');
+  const menu = document.getElementById('pg-sup-menu');
+  if (wrap && menu && !wrap.contains(e.target)) menu.style.display = 'none';
+});
 
 function pgSetCS(cs) {
   pgCS = cs;
@@ -1685,7 +1756,7 @@ function pgGetFiltrado() {
     if (EXCLUIR.includes(estado)) return false;
     if (pgTipo && getTipoOrdem(r) !== pgTipo) return false;
     if (pgCS && pgGetCS(r) !== pgCS) return false;
-    if (pgSupervisor && getSupervisor(r['Código Equipe']||'') !== pgSupervisor) return false;
+    if (pgSupervisores.length && !pgSupervisores.includes(getSupervisor(r['Código Equipe']||''))) return false;
     return true;
   });
 }
