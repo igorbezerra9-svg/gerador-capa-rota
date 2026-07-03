@@ -387,6 +387,15 @@
   }
   .pg-multisel-actions a { font-size:11px;color:var(--navy);font-weight:700;cursor:pointer;text-decoration:none; }
 
+  .cp-group .pg-multisel { display:block; width:100%; }
+  .cp-group .pg-multisel-btn {
+    width:100%; padding:10px 12px; border:1.5px solid var(--gray-200); border-radius:8px;
+    font-size:13px; color:var(--text); background:var(--gray-100); font-family:var(--font-body);
+    text-align:left; justify-content:space-between; display:flex; align-items:center;
+  }
+  .cp-group .pg-multisel-btn.active { background:var(--navy); color:var(--accent); border-color:var(--navy); }
+  .cp-group .pg-multisel-menu { width:100%; min-width:100%; box-sizing:border-box; }
+
   .btn-cloud {
     flex:1; min-width:160px;
     background:var(--gray-100); border:1.5px solid var(--gray-200);
@@ -571,14 +580,20 @@
         </div>
         <div class="cp-group">
           <label>Supervisor</label>
-          <select id="sel-supervisor" onchange="atualizarEquipes()">
-            <option value="">Todos</option>
-            <option value="Cirllek Nepomuceno">Cirllek Nepomuceno</option>
-            <option value="Cicera Maria">Cicera Maria</option>
-            <option value="Jorge Luis">Jorge Luis</option>
-            <option value="Amanda Vasques">Amanda Vasques</option>
-            <option value="Helenilton Silva">Helenilton Silva</option>
-          </select>
+          <div class="pg-multisel" id="cp-sup-wrap">
+            <button type="button" class="pg-multisel-btn" id="cp-sup-btn" onclick="cpToggleSupDropdown(event)">Todos</button>
+            <div class="pg-multisel-menu" id="cp-sup-menu" style="display:none;">
+              <label><input type="checkbox" value="Cirllek Nepomuceno" onchange="cpToggleSupervisor(this)"> Cirllek Nepomuceno</label>
+              <label><input type="checkbox" value="Cicera Maria" onchange="cpToggleSupervisor(this)"> Cicera Maria</label>
+              <label><input type="checkbox" value="Jorge Luis" onchange="cpToggleSupervisor(this)"> Jorge Luis</label>
+              <label><input type="checkbox" value="Amanda Vasques" onchange="cpToggleSupervisor(this)"> Amanda Vasques</label>
+              <label><input type="checkbox" value="Helenilton Silva" onchange="cpToggleSupervisor(this)"> Helenilton Silva</label>
+              <div class="pg-multisel-actions">
+                <a onclick="cpSelectAllSupervisores()">Marcar todos</a>
+                <a onclick="cpClearSupervisores()">Limpar</a>
+              </div>
+            </div>
+          </div>
         </div>
         <div class="cp-group">
           <label>Estado TdC</label>
@@ -911,6 +926,54 @@ function getSupervisor(cod) {
   return SUPERVISOR_MAP[cod] || '';
 }
 
+let cpSupervisores = [];
+
+function cpToggleSupDropdown(e) {
+  if (e) e.stopPropagation();
+  const menu = document.getElementById('cp-sup-menu');
+  menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+}
+
+function cpToggleSupervisor(cb) {
+  const v = cb.value;
+  if (cb.checked) {
+    if (!cpSupervisores.includes(v)) cpSupervisores.push(v);
+  } else {
+    cpSupervisores = cpSupervisores.filter(s => s !== v);
+  }
+  cpUpdateSupBtnLabel();
+  atualizarEquipes();
+}
+
+function cpSelectAllSupervisores() {
+  const boxes = document.querySelectorAll('#cp-sup-menu input[type=checkbox]');
+  cpSupervisores = [...boxes].map(b => { b.checked = true; return b.value; });
+  cpUpdateSupBtnLabel();
+  atualizarEquipes();
+}
+
+function cpClearSupervisores() {
+  const boxes = document.querySelectorAll('#cp-sup-menu input[type=checkbox]');
+  boxes.forEach(b => b.checked = false);
+  cpSupervisores = [];
+  cpUpdateSupBtnLabel();
+  atualizarEquipes();
+}
+
+function cpUpdateSupBtnLabel() {
+  const btn = document.getElementById('cp-sup-btn');
+  if (!btn) return;
+  if (cpSupervisores.length === 0) { btn.textContent = 'Todos'; btn.classList.remove('active'); }
+  else if (cpSupervisores.length === 1) { btn.textContent = cpSupervisores[0]; btn.classList.add('active'); }
+  else { btn.textContent = cpSupervisores.length + ' selecionados'; btn.classList.add('active'); }
+}
+
+document.addEventListener('click', function(e) {
+  const wrap = document.getElementById('cp-sup-wrap');
+  const menu = document.getElementById('cp-sup-menu');
+  if (wrap && menu && !wrap.contains(e.target)) menu.style.display = 'none';
+});
+
 function getTipoEquipe(cod) {
   if (!cod) return '';
   if (/-LB-/.test(cod)) return 'LB';
@@ -922,7 +985,6 @@ function atualizarEquipes() {
   const cs = document.getElementById('sel-cs').value;
   const estado = document.getElementById('sel-estado').value;
   const tipo = document.getElementById('sel-tipo-equipe')?.value || '';
-  const supervisor = document.getElementById('sel-supervisor')?.value || '';
   const selEq = document.getElementById('sel-equipe');
   selEq.innerHTML = '<option value="__todas__">Gerar para TODAS as equipes</option>';
 
@@ -935,7 +997,7 @@ function atualizarEquipes() {
       if (!cod.startsWith(pref)) return;
     }
     if (tipo && getTipoEquipe(cod) !== tipo) return;
-    if (supervisor && getSupervisor(cod) !== supervisor) return;
+    if (cpSupervisores.length && !cpSupervisores.includes(getSupervisor(cod))) return;
     if (estado && (r['Estado TdC'] || '').trim() !== estado) return;
     if (!eqMap[cod]) eqMap[cod] = r['Chefe/Responsável de Equipe'] || '';
     else if (!eqMap[cod] && r['Chefe/Responsável de Equipe']) eqMap[cod] = r['Chefe/Responsável de Equipe'];
@@ -976,7 +1038,6 @@ function getFiltered() {
   const eq = document.getElementById('sel-equipe').value;
   const estado = document.getElementById('sel-estado').value;
   const tipo = document.getElementById('sel-tipo-equipe')?.value || '';
-  const supervisor = document.getElementById('sel-supervisor')?.value || '';
 
   const EXCLUIR_ESTADOS = ['programáveis', 'a reprogramar'];
   return allData.filter(r => {
@@ -988,7 +1049,7 @@ function getFiltered() {
       if (!cod.startsWith(pref)) return false;
     }
     if (tipo && getTipoEquipe(cod) !== tipo) return false;
-    if (supervisor && getSupervisor(cod) !== supervisor) return false;
+    if (cpSupervisores.length && !cpSupervisores.includes(getSupervisor(cod))) return false;
     if (eq && eq !== '__todas__' && cod !== eq) return false;
     if (estado && (r['Estado TdC'] || '').trim() !== estado) return false;
     return true;
