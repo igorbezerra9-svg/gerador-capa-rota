@@ -1427,6 +1427,23 @@ function gerarHTMLCapa(cod, lider, rows, dataHoje, est, hj, ok, modo) {
       + '</tr>';
   }).join('');
 
+  // ── PINS DO MAPA ──
+  const pinsData = JSON.stringify(
+    rows.filter(r => r['Latitude'] && r['Longitude'] && parseFloat(r['Latitude']) !== 0)
+        .map((r, i) => ({
+          i: i+1,
+          lat: parseFloat(r['Latitude']),
+          lng: parseFloat(r['Longitude']),
+          ns:      String(r['Numero de Serviço'] || '').replace(/\\/g,'').replace(/`/g,''),
+          cliente: String(r['Nome e Sobrenome Cliente'] || '').replace(/\\/g,'').replace(/`/g,''),
+          tipo:    String(r['Tipo Remessa WIN'] || r[' Tipo de Serviço'] || '').split(' - ')[0],
+          end:     String(r['Endereço Completo'] || '').replace(/\\/g,'').replace(/`/g,''),
+          prazo:   String(r['Data Prevista Finalização Trabalhos'] || '').replace(' 23:59',''),
+          prio:    getPrioridade(r),
+          color:   getPrioridade(r)==='est'?'#e53935':getPrioridade(r)==='hj'?'#ff9800':'#43a047'
+        }))
+  );
+
   const statsBar = [
     est ? `<div style="flex:1;text-align:center;padding:12px 8px;">
       <div class="kpi-val" style="font-size:26px;font-weight:900;color:#e53935;">${est}</div>
@@ -1551,15 +1568,51 @@ function gerarHTMLCapa(cod, lider, rows, dataHoje, est, hj, ok, modo) {
 
   <!-- SERVIÇOS -->
   <!-- Título -->
-  <div style="font-size:11px;font-weight:700;color:#8097b8;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:10px;padding:0 2px;">
-    📋 ${rows.length} Serviço${rows.length !== 1 ? 's' : ''} — ${modo === 'lista' ? '☰ Visão Lista' : '▦ Visão Cards'}
+  <!-- Toggle -->
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;padding:0 2px;flex-wrap:wrap;gap:8px;">
+    <div style="font-size:11px;font-weight:700;color:#8097b8;text-transform:uppercase;letter-spacing:1.5px;">
+      📋 ${rows.length} Serviço${rows.length !== 1 ? 's' : ''}
+    </div>
+    <div style="display:flex;gap:4px;background:#e4e8ef;border-radius:10px;padding:3px;">
+      <button onclick="setView('cards')" id="vbtn-cards" style="padding:5px 12px;border:none;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer;background:#0d1b2a;color:#e8a020;">▦ Cards</button>
+      <button onclick="setView('lista')"  id="vbtn-lista"  style="padding:5px 12px;border:none;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer;background:transparent;color:#8097b8;">☰ Lista</button>
+      <button onclick="setView('mapa')"   id="vbtn-mapa"   style="padding:5px 12px;border:none;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer;background:transparent;color:#8097b8;">🗺 Mapa</button>
+    </div>
   </div>
 
-  <!-- CONTEÚDO -->
-  ${modo === 'lista'
-    ? '<div style=\"overflow-x:auto;-webkit-overflow-scrolling:touch;border-radius:14px;box-shadow:0 2px 12px rgba(0,0,0,.08);\"><table style=\"width:100%;border-collapse:collapse;font-size:12px;background:#fff;\"><thead><tr style=\"background:#0d1b2a;color:#fff;\"><th style=\"padding:8px 10px;text-align:left;font-size:9px;text-transform:uppercase;letter-spacing:1px;font-weight:700;white-space:nowrap;\">#</th><th style=\"padding:8px 10px;text-align:left;font-size:9px;text-transform:uppercase;letter-spacing:1px;font-weight:700;white-space:nowrap;\">N. Serviço</th><th style=\"padding:8px 10px;text-align:left;font-size:9px;text-transform:uppercase;letter-spacing:1px;font-weight:700;\">Tipo Serviço</th><th style=\"padding:8px 10px;text-align:left;font-size:9px;text-transform:uppercase;letter-spacing:1px;font-weight:700;\">Cod. Cliente</th><th style=\"padding:8px 10px;text-align:left;font-size:9px;text-transform:uppercase;letter-spacing:1px;font-weight:700;\">Nome Cliente</th><th style=\"padding:8px 10px;text-align:left;font-size:9px;text-transform:uppercase;letter-spacing:1px;font-weight:700;\">Endereço</th><th style=\"padding:8px 10px;text-align:left;font-size:9px;text-transform:uppercase;letter-spacing:1px;font-weight:700;white-space:nowrap;\">Data Limite</th><th style=\"padding:8px 10px;text-align:left;font-size:9px;text-transform:uppercase;letter-spacing:1px;font-weight:700;\">Obs</th></tr></thead><tbody>' + listaRows + '</tbody></table></div>'
-    : cards
-  }
+  <!-- VIEW CARDS -->
+  <div id="v-cards">${cards}
+
+  <!-- VIEW LISTA -->
+  <div id="v-lista" style="display:none;">
+    <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;border-radius:14px;box-shadow:0 2px 12px rgba(0,0,0,.08);">
+      <table style="width:100%;border-collapse:collapse;font-size:12px;background:#fff;">
+        <thead><tr style="background:#0d1b2a;color:#fff;">
+          <th style="padding:8px 10px;font-size:9px;text-transform:uppercase;letter-spacing:1px;font-weight:700;">#</th>
+          <th style="padding:8px 10px;font-size:9px;font-weight:700;text-transform:uppercase;white-space:nowrap;">N. Serviço</th>
+          <th style="padding:8px 10px;font-size:9px;font-weight:700;text-transform:uppercase;">Tipo</th>
+          <th style="padding:8px 10px;font-size:9px;font-weight:700;text-transform:uppercase;">Cliente</th>
+          <th style="padding:8px 10px;font-size:9px;font-weight:700;text-transform:uppercase;">Endereço</th>
+          <th style="padding:8px 10px;font-size:9px;font-weight:700;text-transform:uppercase;white-space:nowrap;">Prazo</th>
+          <th style="padding:8px 10px;font-size:9px;font-weight:700;text-transform:uppercase;">Obs</th>
+        </tr></thead>
+        <tbody>${listaRows}</tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- VIEW MAPA -->
+  <div id="v-mapa" style="display:none;margin-bottom:14px;">
+    <div id="mapa-container" style="height:480px;border-radius:14px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.1);"></div>
+    <div id="mapa-offline" style="display:none;background:#fff;border-radius:14px;padding:12px;box-shadow:0 2px 12px rgba(0,0,0,.08);">
+      <div style="font-size:11px;color:#8097b8;text-align:center;margin-bottom:8px;">📡 Sem internet — modo offline</div>
+      <svg id="mapa-svg" viewBox="0 0 400 300" style="width:100%;border-radius:8px;background:#e8edf5;"></svg>
+    </div>
+    <div id="mapa-semgps" style="display:none;text-align:center;padding:40px;color:#8097b8;">
+      <div style="font-size:32px;margin-bottom:8px;">📍</div>
+      <div style="font-weight:600;">Nenhuma OS com coordenadas GPS</div>
+    </div>
+  </div>
 
   <!-- RODAPÉ -->
   <div class="cr-footer-block" style="background:#fff;border-radius:14px;padding:16px 20px;margin-top:6px;box-shadow:0 2px 8px rgba(0,0,0,.06);">
@@ -1580,6 +1633,107 @@ function gerarHTMLCapa(cod, lider, rows, dataHoje, est, hj, ok, modo) {
   </div>
 
 </div>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script>
+// setViewCapa - definido antes de tudo
+function setView(v) {
+  ['cards','lista','mapa'].forEach(function(k) {
+    var el = document.getElementById('v-'+k);
+    if (el) el.style.display = k===v ? 'block' : 'none';
+    var btn = document.getElementById('vbtn-'+k);
+    if (btn) {
+      btn.style.background = k===v ? '#0d1b2a' : 'transparent';
+      btn.style.color = k===v ? '#e8a020' : '#8097b8';
+    }
+  });
+  if (v === 'mapa') iniciarMapa();
+}
+<\/script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"><\/script>
+<script>
+var PINS = ${pinsData};
+var _mapaIniciado = false;
+
+function iniciarMapa() {
+  if (_mapaIniciado) return;
+  _mapaIniciado = true;
+  var container = document.getElementById('mapa-container');
+  var offline   = document.getElementById('mapa-offline');
+  var semgps    = document.getElementById('mapa-semgps');
+  if (!PINS.length) { semgps.style.display = 'block'; return; }
+  if (typeof L === 'undefined') { iniciarMapaOffline(); return; }
+  // Testa internet
+  var img = new Image();
+  img.onload  = function() { iniciarMapaOnline(); };
+  img.onerror = function() { iniciarMapaOffline(); };
+  img.src = 'https://tile.openstreetmap.org/0/0/0.png?_=' + Date.now();
+}
+
+function iniciarMapaOnline() {
+  var container = document.getElementById('mapa-container');
+  container.style.display = 'block';
+  var map = L.map('mapa-container');
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap'
+  }).addTo(map);
+  var markers = [];
+  PINS.forEach(function(p) {
+    var icon = L.divIcon({
+      className: '',
+      html: '<div style="background:' + p.color + ';color:#fff;font-family:monospace;font-weight:900;font-size:11px;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.4);">' + p.i + '</div>',
+      iconSize: [28,28], iconAnchor: [14,14], popupAnchor: [0,-16]
+    });
+    var m = L.marker([p.lat, p.lng], {icon: icon}).addTo(map);
+    var prioLabel = p.prio==='est' ? '⚠ Estourada' : p.prio==='hj' ? '⏰ Vence hoje' : '✓ No prazo';
+    m.bindPopup(
+      '<div style="font-family:Segoe UI,sans-serif;min-width:210px;">'
+      + '<div style="font-family:monospace;color:#1565c0;font-weight:700;font-size:12px;">' + p.ns + '</div>'
+      + '<div style="font-size:13px;font-weight:700;color:#1a2535;margin:4px 0 2px;">' + p.cliente + '</div>'
+      + '<div style="font-size:10px;color:#8097b8;margin-bottom:4px;">' + p.tipo + '</div>'
+      + '<div style="font-size:11px;color:#2a3a50;margin-bottom:6px;">' + p.end + '</div>'
+      + '<div style="font-size:11px;font-weight:700;color:' + p.color + ';margin-bottom:8px;">' + prioLabel + ' · ' + p.prazo + '</div>'
+      + '<div style="display:flex;gap:6px;">'
+      + '<a href="https://www.google.com/maps?q=' + p.lat + ',' + p.lng + '" target="_blank" style="flex:1;text-align:center;background:#1565c0;color:#fff;padding:5px;border-radius:6px;font-size:11px;font-weight:700;text-decoration:none;">📍 Maps</a>'
+      + '<a href="https://waze.com/ul?ll=' + p.lat + ',' + p.lng + '&navigate=yes" target="_blank" style="flex:1;text-align:center;background:#06c0d9;color:#fff;padding:5px;border-radius:6px;font-size:11px;font-weight:700;text-decoration:none;">🗺 Waze</a>'
+      + '</div></div>',
+      {maxWidth: 270}
+    );
+    markers.push(m);
+  });
+  var group = L.featureGroup(markers);
+  map.fitBounds(group.getBounds().pad(0.15));
+  setTimeout(function() { map.invalidateSize(); }, 200);
+}
+
+function iniciarMapaOffline() {
+  document.getElementById('mapa-offline').style.display = 'block';
+  var svg = document.getElementById('mapa-svg');
+  var lats = PINS.map(function(p){return p.lat;});
+  var lngs = PINS.map(function(p){return p.lng;});
+  var minLat=Math.min.apply(null,lats), maxLat=Math.max.apply(null,lats);
+  var minLng=Math.min.apply(null,lngs), maxLng=Math.max.apply(null,lngs);
+  var padLat=(maxLat-minLat)*0.15||0.01, padLng=(maxLng-minLng)*0.15||0.01;
+  minLat-=padLat; maxLat+=padLat; minLng-=padLng; maxLng+=padLng;
+  var W=400, H=300, s='';
+  var pts = PINS.map(function(p){
+    return {
+      x: ((p.lng-minLng)/(maxLng-minLng))*(W-40)+20,
+      y: H - (((p.lat-minLat)/(maxLat-minLat))*(H-40)+20),
+      p: p
+    };
+  });
+  if (pts.length > 1) {
+    var d = 'M '+pts[0].x+' '+pts[0].y;
+    pts.slice(1).forEach(function(pt){ d += ' L '+pt.x+' '+pt.y; });
+    s += '<path d="'+d+'" stroke="#8097b8" stroke-width="1.5" fill="none" stroke-dasharray="4,3" opacity="0.6"/>';
+  }
+  pts.forEach(function(pt){
+    s += '<circle cx="'+pt.x+'" cy="'+pt.y+'" r="13" fill="'+pt.p.color+'" stroke="#fff" stroke-width="2.5"/>';
+    s += '<text x="'+pt.x+'" y="'+(pt.y+4)+'" text-anchor="middle" fill="#fff" font-family="monospace" font-weight="900" font-size="10" pointer-events="none">'+pt.p.i+'</text>';
+  });
+  svg.innerHTML = s;
+}
+<\/script>
 </body>
 </html>`;
 }
