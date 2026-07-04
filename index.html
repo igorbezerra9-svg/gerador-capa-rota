@@ -848,17 +848,15 @@ function setupUI() {
   document.getElementById('control-panel').style.display = 'block';
   document.getElementById('cp-filename').textContent = fileName;
 
-  // Centros de serviço (prefixo do código equipe)
+  // Centros de serviço (prefixo do código equipe) — de acordo com a região ativa
+  const centros = CS_POR_REGIAO[regiaoAtual] || [];
   const csSet = new Set();
   allData.forEach(r => {
     const cod = r['Código Equipe'] || '';
-    if (cod) {
-      // Mapear prefixos
-      if (cod.startsWith('JZ')) csSet.add('Juazeiro do Norte (JZ)');
-      else if (cod.startsWith('ML')) csSet.add('Milagres (ML)');
-      else if (cod.startsWith('CP')) csSet.add('Campos Sales (CP)');
-      else csSet.add('Outros');
-    }
+    const muni = (r['Município'] || '').toUpperCase();
+    if (!cod) return;
+    const encontrado = centros.find(c => csMatch(c, cod, muni));
+    csSet.add(encontrado ? `${encontrado.nomeCompleto} (${encontrado.sigla})` : 'Outros');
   });
   const selCS = document.getElementById('sel-cs');
   selCS.innerHTML = '<option value="">Todos</option>';
@@ -1991,24 +1989,28 @@ function pgSetRegiao(r) {
 // ══ CENTROS DE SERVIÇO POR REGIÃO ══
 const CS_POR_REGIAO = {
   'Sul': [
-    { id: 'jz', nome: 'Juazeiro', cor: '#2a78d6', match: (cod, muni) => cod.startsWith('JZ') || cod.includes('-JZ-') || muni.includes('JUAZEIRO') },
-    { id: 'ml', nome: 'Milagres', cor: '#1baf7a', match: (cod, muni) => cod.startsWith('ML') || cod.includes('-ML-') || muni.includes('MILAGRE') },
-    { id: 'cp', nome: 'C. Sales', cor: '#eda100', match: (cod, muni) => cod.startsWith('CP') || cod.includes('-CP-') || muni.includes('CAMPO') }
+    { sigla: 'JZ', nome: 'Juazeiro', nomeCompleto: 'Juazeiro do Norte', cor: '#2a78d6' },
+    { sigla: 'ML', nome: 'Milagres', nomeCompleto: 'Milagres', cor: '#1baf7a' },
+    { sigla: 'CP', nome: 'C. Sales', nomeCompleto: 'Campos Sales', cor: '#eda100' }
   ],
   'CentroSul': [],
   'Leste': [
-    { id: 'rsl', nome: 'Russas', cor: '#2a78d6', match: (cod, muni) => cod.startsWith('RSL') || cod.includes('-RSL-') || muni.includes('RUSSAS') },
-    { id: 'art', nome: 'Aracati', cor: '#1baf7a', match: (cod, muni) => cod.startsWith('ART') || cod.includes('-ART-') || muni.includes('ARACATI') },
-    { id: 'jgb', nome: 'Jaguaribe', cor: '#eda100', match: (cod, muni) => cod.startsWith('JGB') || cod.includes('-JGB-') || muni.includes('JAGUARIBE') }
+    { sigla: 'RSL', nome: 'Russas', nomeCompleto: 'Russas', cor: '#2a78d6' },
+    { sigla: 'ART', nome: 'Aracati', nomeCompleto: 'Aracati', cor: '#1baf7a' },
+    { sigla: 'JGB', nome: 'Jaguaribe', nomeCompleto: 'Jaguaribe', cor: '#eda100' }
   ]
 };
+
+function csMatch(c, cod, muni) {
+  return cod.startsWith(c.sigla) || cod.includes('-' + c.sigla + '-') || muni.includes(c.nomeCompleto.toUpperCase());
+}
 
 function pgGetCS(r) {
   const cod = r['Código Equipe'] || '';
   const muni = (r['Município'] || '').toUpperCase();
   const centros = CS_POR_REGIAO[pgRegiao] || [];
   for (const c of centros) {
-    if (c.match(cod, muni)) return c.nome;
+    if (csMatch(c, cod, muni)) return c.nome;
   }
   return 'Outros';
 }
@@ -2017,7 +2019,7 @@ function pgRenderCSButtons() {
   const centros = CS_POR_REGIAO[pgRegiao] || [];
   const cont = document.getElementById('pg-cs-buttons');
   cont.innerHTML = centros.map(c =>
-    `<button class="pg-tipo-btn" id="pg-cs-${c.id}" onclick="pgSetCS('${c.nome}')">${c.nome}</button>`
+    `<button class="pg-tipo-btn" id="pg-cs-${c.sigla.toLowerCase()}" onclick="pgSetCS('${c.nome}')">${c.nome}</button>`
   ).join('');
   document.getElementById('pg-cs-all').classList.add('active');
   pgCS = '';
@@ -2074,7 +2076,7 @@ function pgSetCS(cs) {
   const centros = CS_POR_REGIAO[pgRegiao] || [];
   document.getElementById('pg-cs-all').classList.toggle('active', cs === '');
   centros.forEach(c => {
-    const btn = document.getElementById('pg-cs-' + c.id);
+    const btn = document.getElementById('pg-cs-' + c.sigla.toLowerCase());
     if (btn) btn.classList.toggle('active', cs === c.nome);
   });
   pgRender();
@@ -2583,6 +2585,7 @@ async function carregarNuvem(regiao) {
     const rows = await res.json();
     if (!rows.length || !rows[0].dados) { showToast('Sem dados salvos para ' + regiao, 3000); return; }
     allData = rows[0].dados;
+    regiaoAtual = regiao;
     const dt = new Date(rows[0].atualizado_em);
     fileName = regiao + ' — nuvem ' + dt.toLocaleDateString('pt-BR') + ' ' + dt.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
     setupUI();
