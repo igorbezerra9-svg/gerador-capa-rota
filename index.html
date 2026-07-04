@@ -588,11 +588,7 @@
           <div class="pg-multisel" id="cp-sup-wrap">
             <button type="button" class="pg-multisel-btn" id="cp-sup-btn" onclick="cpToggleSupDropdown(event)">Todos</button>
             <div class="pg-multisel-menu" id="cp-sup-menu" style="display:none;">
-              <label><input type="checkbox" value="Cirllek Nepomuceno" onchange="cpToggleSupervisor(this)"> Cirllek Nepomuceno</label>
-              <label><input type="checkbox" value="Cicera Maria" onchange="cpToggleSupervisor(this)"> Cicera Maria</label>
-              <label><input type="checkbox" value="Jorge Luis" onchange="cpToggleSupervisor(this)"> Jorge Luis</label>
-              <label><input type="checkbox" value="Amanda Vasques" onchange="cpToggleSupervisor(this)"> Amanda Vasques</label>
-              <label><input type="checkbox" value="Helenilton Silva" onchange="cpToggleSupervisor(this)"> Helenilton Silva</label>
+              <div id="cp-sup-checkboxes"></div>
               <div class="pg-multisel-actions">
                 <a onclick="cpSelectAllSupervisores()">Marcar todos</a>
                 <a onclick="cpClearSupervisores()">Limpar</a>
@@ -667,11 +663,7 @@
       <div class="pg-multisel" id="pg-sup-wrap">
         <button type="button" class="pg-multisel-btn" id="pg-sup-btn" onclick="pgToggleSupDropdown(event)">Todos</button>
         <div class="pg-multisel-menu" id="pg-sup-menu" style="display:none;">
-          <label><input type="checkbox" value="Cirllek Nepomuceno" onchange="pgToggleSupervisor(this)"> Cirllek Nepomuceno</label>
-          <label><input type="checkbox" value="Cicera Maria" onchange="pgToggleSupervisor(this)"> Cicera Maria</label>
-          <label><input type="checkbox" value="Jorge Luis" onchange="pgToggleSupervisor(this)"> Jorge Luis</label>
-          <label><input type="checkbox" value="Amanda Vasques" onchange="pgToggleSupervisor(this)"> Amanda Vasques</label>
-          <label><input type="checkbox" value="Helenilton Silva" onchange="pgToggleSupervisor(this)"> Helenilton Silva</label>
+          <div id="pg-sup-checkboxes"></div>
           <div class="pg-multisel-actions">
             <a onclick="pgSelectAllSupervisores()">Marcar todos</a>
             <a onclick="pgClearSupervisores()">Limpar</a>
@@ -864,6 +856,8 @@ function setupUI() {
     selCS.innerHTML += `<option value="${cs}">${cs}</option>`;
   });
 
+  cpRenderSupMenu();
+
   atualizarEquipes();
 }
 
@@ -924,7 +918,30 @@ const SUPERVISOR_MAP = {
 };
 
 function getSupervisor(cod) {
-  return SUPERVISOR_MAP[cod] || '';
+  if (SUPERVISOR_MAP[cod]) return SUPERVISOR_MAP[cod];
+  // Leste ainda não tem mapeamento por código exato de equipe — usa regra por prefixo/tipo
+  if (cod.startsWith('ART')) return 'Airton';
+  if (cod.startsWith('JGB')) return 'Mailton';
+  if (cod.startsWith('RSL')) {
+    if (/-MM-/.test(cod)) return 'Valdete';
+    if (/-LB-/.test(cod)) return 'Wilder';
+  }
+  return '';
+}
+
+// ══ SUPERVISORES POR REGIÃO (pra popular os menus de filtro) ══
+const SUPERVISORES_POR_REGIAO = {
+  'Sul': ['Cirllek Nepomuceno', 'Cicera Maria', 'Jorge Luis', 'Amanda Vasques', 'Helenilton Silva'],
+  'CentroSul': [],
+  'Leste': ['Airton', 'Mailton', 'Valdete', 'Wilder']
+};
+
+function cpRenderSupMenu() {
+  const nomes = SUPERVISORES_POR_REGIAO[regiaoAtual] || [];
+  const cont = document.getElementById('cp-sup-checkboxes');
+  cont.innerHTML = nomes.map(n => `<label><input type="checkbox" value="${n}" onchange="cpToggleSupervisor(this)"> ${n}</label>`).join('');
+  cpSupervisores = [];
+  cpUpdateSupBtnLabel();
 }
 
 let cpSupervisores = [];
@@ -1983,6 +2000,7 @@ function pgSetRegiao(r) {
   document.getElementById('pg-btn-cs').classList.toggle('active', r === 'CentroSul');
   document.getElementById('pg-btn-leste').classList.toggle('active', r === 'Leste');
   pgRenderCSButtons();
+  pgRenderSupMenu();
   pgCarregar();
 }
 
@@ -2023,6 +2041,14 @@ function pgRenderCSButtons() {
   ).join('');
   document.getElementById('pg-cs-all').classList.add('active');
   pgCS = '';
+}
+
+function pgRenderSupMenu() {
+  const nomes = SUPERVISORES_POR_REGIAO[pgRegiao] || [];
+  const cont = document.getElementById('pg-sup-checkboxes');
+  cont.innerHTML = nomes.map(n => `<label><input type="checkbox" value="${n}" onchange="pgToggleSupervisor(this)"> ${n}</label>`).join('');
+  pgSupervisores = [];
+  pgUpdateSupBtnLabel();
 }
 
 function pgToggleSupDropdown(e) {
@@ -2663,6 +2689,7 @@ window.addEventListener('DOMContentLoaded', () => {
   checarTimestamps();
   iniciarRealtime();
   pgRenderCSButtons();
+  pgRenderSupMenu();
 });
 
 function resetApp() {
