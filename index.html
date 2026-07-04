@@ -660,9 +660,7 @@
     <div style="display:flex;align-items:center;gap:8px;">
       <span style="font-size:11px;color:var(--gray-400);font-weight:700;text-transform:uppercase;letter-spacing:1px;">C. Serviço:</span>
       <button class="pg-tipo-btn active" id="pg-cs-all" onclick="pgSetCS('')">Todos</button>
-      <button class="pg-tipo-btn" id="pg-cs-jz" onclick="pgSetCS('Juazeiro')">Juazeiro</button>
-      <button class="pg-tipo-btn" id="pg-cs-ml" onclick="pgSetCS('Milagres')">Milagres</button>
-      <button class="pg-tipo-btn" id="pg-cs-cp" onclick="pgSetCS('C. Sales')">C. Sales</button>
+      <span id="pg-cs-buttons" style="display:flex;gap:8px;"></span>
     </div>
     <div style="display:flex;align-items:center;gap:8px;">
       <span style="font-size:11px;color:var(--gray-400);font-weight:700;text-transform:uppercase;letter-spacing:1px;">Supervisor:</span>
@@ -1986,16 +1984,43 @@ function pgSetRegiao(r) {
   document.getElementById('pg-btn-sul').classList.toggle('active', r === 'Sul');
   document.getElementById('pg-btn-cs').classList.toggle('active', r === 'CentroSul');
   document.getElementById('pg-btn-leste').classList.toggle('active', r === 'Leste');
+  pgRenderCSButtons();
   pgCarregar();
 }
+
+// ══ CENTROS DE SERVIÇO POR REGIÃO ══
+const CS_POR_REGIAO = {
+  'Sul': [
+    { id: 'jz', nome: 'Juazeiro', cor: '#2a78d6', match: (cod, muni) => cod.startsWith('JZ') || cod.includes('-JZ-') || muni.includes('JUAZEIRO') },
+    { id: 'ml', nome: 'Milagres', cor: '#1baf7a', match: (cod, muni) => cod.startsWith('ML') || cod.includes('-ML-') || muni.includes('MILAGRE') },
+    { id: 'cp', nome: 'C. Sales', cor: '#eda100', match: (cod, muni) => cod.startsWith('CP') || cod.includes('-CP-') || muni.includes('CAMPO') }
+  ],
+  'CentroSul': [],
+  'Leste': [
+    { id: 'rsl', nome: 'Russas', cor: '#2a78d6', match: (cod, muni) => cod.startsWith('RSL') || cod.includes('-RSL-') || muni.includes('RUSSAS') },
+    { id: 'art', nome: 'Aracati', cor: '#1baf7a', match: (cod, muni) => cod.startsWith('ART') || cod.includes('-ART-') || muni.includes('ARACATI') },
+    { id: 'jgb', nome: 'Jaguaribe', cor: '#eda100', match: (cod, muni) => cod.startsWith('JGB') || cod.includes('-JGB-') || muni.includes('JAGUARIBE') }
+  ]
+};
 
 function pgGetCS(r) {
   const cod = r['Código Equipe'] || '';
   const muni = (r['Município'] || '').toUpperCase();
-  if (cod.includes('-JZ-') || cod.startsWith('JZ') || muni.includes('JUAZEIRO')) return 'Juazeiro';
-  if (cod.includes('-ML-') || cod.startsWith('ML') || muni.includes('MILAGRE')) return 'Milagres';
-  if (cod.includes('-CP-') || cod.startsWith('CP') || muni.includes('CAMPO')) return 'C. Sales';
+  const centros = CS_POR_REGIAO[pgRegiao] || [];
+  for (const c of centros) {
+    if (c.match(cod, muni)) return c.nome;
+  }
   return 'Outros';
+}
+
+function pgRenderCSButtons() {
+  const centros = CS_POR_REGIAO[pgRegiao] || [];
+  const cont = document.getElementById('pg-cs-buttons');
+  cont.innerHTML = centros.map(c =>
+    `<button class="pg-tipo-btn" id="pg-cs-${c.id}" onclick="pgSetCS('${c.nome}')">${c.nome}</button>`
+  ).join('');
+  document.getElementById('pg-cs-all').classList.add('active');
+  pgCS = '';
 }
 
 function pgToggleSupDropdown(e) {
@@ -2046,11 +2071,12 @@ document.addEventListener('click', function(e) {
 
 function pgSetCS(cs) {
   pgCS = cs;
-  ['all','jz','ml','cp'].forEach(k => document.getElementById('pg-cs-' + k).classList.remove('active'));
-  if (cs === '') document.getElementById('pg-cs-all').classList.add('active');
-  else if (cs === 'Juazeiro') document.getElementById('pg-cs-jz').classList.add('active');
-  else if (cs === 'Milagres') document.getElementById('pg-cs-ml').classList.add('active');
-  else if (cs === 'C. Sales') document.getElementById('pg-cs-cp').classList.add('active');
+  const centros = CS_POR_REGIAO[pgRegiao] || [];
+  document.getElementById('pg-cs-all').classList.toggle('active', cs === '');
+  centros.forEach(c => {
+    const btn = document.getElementById('pg-cs-' + c.id);
+    if (btn) btn.classList.toggle('active', cs === c.nome);
+  });
   pgRender();
 }
 
@@ -2148,15 +2174,12 @@ function pgRenderKPIs(dados) {
 function pgRenderCSBars(dados) {
   const csMap = {};
   dados.forEach(r => {
-    const cod = r['Código Equipe'] || '';
-    let cs = 'Outros';
-    if (cod.startsWith('JZ') || cod.includes('-JZ-') || (r['Município']||'').toUpperCase().includes('JUAZEIRO')) cs = 'Juazeiro';
-    else if (cod.startsWith('ML') || cod.includes('-ML-') || (r['Município']||'').toUpperCase().includes('MILAGRE')) cs = 'Milagres';
-    else if (cod.startsWith('CP') || cod.includes('-CP-') || (r['Município']||'').toUpperCase().includes('CAMPO')) cs = 'C. Sales';
+    const cs = pgGetCS(r);
     csMap[cs] = (csMap[cs]||0) + 1;
   });
   const total = dados.length || 1;
-  const colors = { 'Juazeiro':'#2a78d6','Milagres':'#1baf7a','C. Sales':'#eda100','Outros':'#888' };
+  const colors = { 'Outros':'#888' };
+  (CS_POR_REGIAO[pgRegiao] || []).forEach(c => { colors[c.nome] = c.cor; });
   let html = '';
   Object.entries(csMap).sort((a,b)=>b[1]-a[1]).forEach(([cs,n]) => {
     const pct = Math.round((n/total)*100);
@@ -2636,6 +2659,7 @@ function fecharBanner() {
 window.addEventListener('DOMContentLoaded', () => {
   checarTimestamps();
   iniciarRealtime();
+  pgRenderCSButtons();
 });
 
 function resetApp() {
