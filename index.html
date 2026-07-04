@@ -842,18 +842,19 @@ function setupUI() {
 
   // Centros de serviço (prefixo do código equipe) — de acordo com a região ativa
   const centros = CS_POR_REGIAO[regiaoAtual] || [];
-  const csSet = new Set();
+  const csMap = {}; // nome -> texto de exibição
   allData.forEach(r => {
     const cod = r['Código Equipe'] || '';
     const muni = (r['Município'] || '').toUpperCase();
     if (!cod) return;
     const encontrado = centros.find(c => csMatch(c, cod, muni));
-    csSet.add(encontrado ? `${encontrado.nomeCompleto} (${encontrado.sigla})` : 'Outros');
+    if (encontrado) csMap[encontrado.nome] = `${encontrado.nomeCompleto} (${encontrado.siglaLabel})`;
+    else csMap['Outros'] = 'Outros';
   });
   const selCS = document.getElementById('sel-cs');
   selCS.innerHTML = '<option value="">Todos</option>';
-  [...csSet].sort().forEach(cs => {
-    selCS.innerHTML += `<option value="${cs}">${cs}</option>`;
+  Object.keys(csMap).sort().forEach(nome => {
+    selCS.innerHTML += `<option value="${nome}">${csMap[nome]}</option>`;
   });
 
   cpRenderSupMenu();
@@ -926,13 +927,18 @@ function getSupervisor(cod) {
     if (/-MM-/.test(cod)) return 'Valdete';
     if (/-LB-/.test(cod)) return 'Wilder';
   }
+  // Centro Sul também usa regra por prefixo
+  if (cod.startsWith('ICO')) return 'Barbara';
+  if (cod.startsWith('IGT')) return 'Fernando';
+  if (cod.startsWith('TAA')) return 'Riverson';
+  if (cod.startsWith('TAM') || cod.startsWith('TAS') || cod.startsWith('SNP')) return 'Maycon';
   return '';
 }
 
 // ══ SUPERVISORES POR REGIÃO (pra popular os menus de filtro) ══
 const SUPERVISORES_POR_REGIAO = {
   'Sul': ['Cirllek Nepomuceno', 'Cicera Maria', 'Jorge Luis', 'Amanda Vasques', 'Helenilton Silva'],
-  'CentroSul': [],
+  'CentroSul': ['Barbara', 'Fernando', 'Riverson', 'Maycon'],
   'Leste': ['Airton', 'Mailton', 'Valdete', 'Wilder']
 };
 
@@ -1010,10 +1016,7 @@ function atualizarEquipes() {
   allData.forEach(r => {
     const cod = r['Código Equipe'] || '';
     if (!cod) return;
-    if (cs) {
-      const pref = cs.split(' (')[1]?.replace(')','') || '';
-      if (!cod.startsWith(pref)) return;
-    }
+    if (cs && getCentroServico(cod, (r['Município'] || '').toUpperCase(), regiaoAtual) !== cs) return;
     if (tipo && getTipoEquipe(cod) !== tipo) return;
     if (cpSupervisores.length && !cpSupervisores.includes(getSupervisor(cod))) return;
     if (estado && (r['Estado TdC'] || '').trim() !== estado) return;
@@ -1062,10 +1065,7 @@ function getFiltered() {
     const estadoR = (r['Estado TdC'] || '').trim().toLowerCase();
     if (EXCLUIR_ESTADOS.includes(estadoR)) return false;
     const cod = r['Código Equipe'] || '';
-    if (cs) {
-      const pref = cs.split(' (')[1]?.replace(')','') || '';
-      if (!cod.startsWith(pref)) return false;
-    }
+    if (cs && getCentroServico(cod, (r['Município'] || '').toUpperCase(), regiaoAtual) !== cs) return false;
     if (tipo && getTipoEquipe(cod) !== tipo) return false;
     if (cpSupervisores.length && !cpSupervisores.includes(getSupervisor(cod))) return false;
     if (eq && eq !== '__todas__' && cod !== eq) return false;
@@ -2005,39 +2005,52 @@ function pgSetRegiao(r) {
 }
 
 // ══ CENTROS DE SERVIÇO POR REGIÃO ══
+// siglas: lista de prefixos de Código Equipe que pertencem a esse centro
+// siglaLabel: como as siglas aparecem no dropdown da aba Gerador (ex: "TAM/TAS/SNP")
 const CS_POR_REGIAO = {
   'Sul': [
-    { sigla: 'JZ', nome: 'Juazeiro', nomeCompleto: 'Juazeiro do Norte', cor: '#2a78d6' },
-    { sigla: 'ML', nome: 'Milagres', nomeCompleto: 'Milagres', cor: '#1baf7a' },
-    { sigla: 'CP', nome: 'C. Sales', nomeCompleto: 'Campos Sales', cor: '#eda100' }
+    { siglas: ['JZ'], siglaLabel: 'JZ', nome: 'Juazeiro', nomeCompleto: 'Juazeiro do Norte', cor: '#2a78d6' },
+    { siglas: ['ML'], siglaLabel: 'ML', nome: 'Milagres', nomeCompleto: 'Milagres', cor: '#1baf7a' },
+    { siglas: ['CP'], siglaLabel: 'CP', nome: 'C. Sales', nomeCompleto: 'Campos Sales', cor: '#eda100' }
   ],
-  'CentroSul': [],
+  'CentroSul': [
+    { siglas: ['ICO'], siglaLabel: 'ICO', nome: 'Ico', nomeCompleto: 'Ico', cor: '#2a78d6' },
+    { siglas: ['IGT'], siglaLabel: 'IGT', nome: 'Iguatu', nomeCompleto: 'Iguatu', cor: '#1baf7a' },
+    { siglas: ['TAA'], siglaLabel: 'TAA', nome: 'Taua', nomeCompleto: 'Taua', cor: '#eda100' },
+    { siglas: ['TAM', 'TAS', 'SNP'], siglaLabel: 'TAM/TAS/SNP', nome: 'Senador', nomeCompleto: 'Senador Pompeu', cor: '#c0392b' }
+  ],
   'Leste': [
-    { sigla: 'RSL', nome: 'Russas', nomeCompleto: 'Russas', cor: '#2a78d6' },
-    { sigla: 'ART', nome: 'Aracati', nomeCompleto: 'Aracati', cor: '#1baf7a' },
-    { sigla: 'JGB', nome: 'Jaguaribe', nomeCompleto: 'Jaguaribe', cor: '#eda100' }
+    { siglas: ['RSL'], siglaLabel: 'RSL', nome: 'Russas', nomeCompleto: 'Russas', cor: '#2a78d6' },
+    { siglas: ['ART'], siglaLabel: 'ART', nome: 'Aracati', nomeCompleto: 'Aracati', cor: '#1baf7a' },
+    { siglas: ['JGB'], siglaLabel: 'JGB', nome: 'Jaguaribe', nomeCompleto: 'Jaguaribe', cor: '#eda100' }
   ]
 };
 
-function csMatch(c, cod, muni) {
-  return cod.startsWith(c.sigla) || cod.includes('-' + c.sigla + '-') || muni.includes(c.nomeCompleto.toUpperCase());
+function csSlug(nome) {
+  return nome.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
 }
 
-function pgGetCS(r) {
-  const cod = r['Código Equipe'] || '';
-  const muni = (r['Município'] || '').toUpperCase();
-  const centros = CS_POR_REGIAO[pgRegiao] || [];
+function csMatch(c, cod, muni) {
+  return c.siglas.some(s => cod.startsWith(s) || cod.includes('-' + s + '-')) || muni.includes(c.nomeCompleto.toUpperCase());
+}
+
+function getCentroServico(cod, muni, regiao) {
+  const centros = CS_POR_REGIAO[regiao] || [];
   for (const c of centros) {
     if (csMatch(c, cod, muni)) return c.nome;
   }
   return 'Outros';
 }
 
+function pgGetCS(r) {
+  return getCentroServico(r['Código Equipe'] || '', (r['Município'] || '').toUpperCase(), pgRegiao);
+}
+
 function pgRenderCSButtons() {
   const centros = CS_POR_REGIAO[pgRegiao] || [];
   const cont = document.getElementById('pg-cs-buttons');
   cont.innerHTML = centros.map(c =>
-    `<button class="pg-tipo-btn" id="pg-cs-${c.sigla.toLowerCase()}" onclick="pgSetCS('${c.nome}')">${c.nome}</button>`
+    `<button class="pg-tipo-btn" id="pg-cs-${csSlug(c.nome)}" onclick="pgSetCS('${c.nome}')">${c.nome}</button>`
   ).join('');
   document.getElementById('pg-cs-all').classList.add('active');
   pgCS = '';
@@ -2102,7 +2115,7 @@ function pgSetCS(cs) {
   const centros = CS_POR_REGIAO[pgRegiao] || [];
   document.getElementById('pg-cs-all').classList.toggle('active', cs === '');
   centros.forEach(c => {
-    const btn = document.getElementById('pg-cs-' + c.sigla.toLowerCase());
+    const btn = document.getElementById('pg-cs-' + csSlug(c.nome));
     if (btn) btn.classList.toggle('active', cs === c.nome);
   });
   pgRender();
