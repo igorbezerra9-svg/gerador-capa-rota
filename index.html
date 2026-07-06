@@ -1150,9 +1150,14 @@ function getPrioridade(r) {
   // Vencida: prazo já passou
   if (dt < agora) return 'est';
 
-  // "Vencendo Hoje": vence até 09:00 do dia seguinte
-  const amanha9h = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate() + 1, 9, 0, 0);
-  if (dt <= amanha9h) return 'hj';
+  // "Vencendo Hoje": normalmente vence até 09:00 do dia seguinte.
+  // Exceção: se hoje é SÁBADO, as equipes não trabalham domingo — então
+  // tudo que vence sábado OU domingo entra como "vence hoje", pra ser
+  // resolvido no sábado junto (janela vai até 09:00 de segunda-feira).
+  const ehSabado = hoje.getDay() === 6; // 0=domingo ... 6=sábado
+  const diasJanela = ehSabado ? 2 : 1;
+  const limite9h = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate() + diasJanela, 9, 0, 0);
+  if (dt <= limite9h) return 'hj';
 
   return 'ok';
 }
@@ -2206,6 +2211,10 @@ function pgRenderKPIs(dados, dadosTodos) {
   // pra não perder nada que vença hoje mesmo que ainda não tenha equipe
   let hj = 0;
   dadosTodos.forEach(r => { if (getPrioridade(r) === 'hj') hj++; });
+  const ehSabado = hoje.getDay() === 6;
+  const hjSubtitulo = ehSabado
+    ? 'sábado + domingo · até 09:00 de segunda · todos os estados · clique pra ver'
+    : 'até 09:00 amanhã · todos os estados · clique pra ver';
   document.getElementById('pg-kpis').innerHTML = `
     <div onclick="pgAbrirModal('est')" style="background:#fdecea;border-radius:12px;padding:14px 16px;cursor:pointer;transition:opacity .15s;" onmouseover="this.style.opacity='.8'" onmouseout="this.style.opacity='1'">
       <div style="font-size:10px;color:#c0392b;text-transform:uppercase;letter-spacing:.8px;font-weight:700;margin-bottom:6px;">⚠ Estouradas</div>
@@ -2215,7 +2224,7 @@ function pgRenderKPIs(dados, dadosTodos) {
     <div onclick="pgAbrirModal('hj')" style="background:#fff3e8;border-radius:12px;padding:14px 16px;cursor:pointer;transition:opacity .15s;" onmouseover="this.style.opacity='.8'" onmouseout="this.style.opacity='1'">
       <div style="font-size:10px;color:#d35400;text-transform:uppercase;letter-spacing:.8px;font-weight:700;margin-bottom:6px;">⏰ Vencem hoje</div>
       <div style="font-size:28px;font-weight:700;color:#d35400;line-height:1;">${hj}</div>
-      <div style="font-size:11px;color:#ffb74d;margin-top:4px;">até 09:00 amanhã · todos os estados · clique pra ver</div>
+      <div style="font-size:11px;color:#ffb74d;margin-top:4px;">${hjSubtitulo}</div>
     </div>
     <div onclick="pgAbrirModal('ok')" style="background:#eaf7ef;border-radius:12px;padding:14px 16px;cursor:pointer;transition:opacity .15s;" onmouseover="this.style.opacity='.8'" onmouseout="this.style.opacity='1'">
       <div style="font-size:10px;color:#1a7a40;text-transform:uppercase;letter-spacing:.8px;font-weight:700;margin-bottom:6px;">✓ No prazo</div>
