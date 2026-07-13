@@ -1121,9 +1121,34 @@ function getTipoOrdemOrder(r) {
 }
 
 // ══ PRIORIDADE ══
+
+// Converte número serial de data do Excel (dias desde 30/12/1899) pra Date.
+// Precisa disso porque, dependendo de como a célula foi formatada na origem
+// (Texto vs Data/Número), o SheetJS pode devolver um número puro em vez do
+// texto "dd/mm/aaaa hh:mm" — acontece de forma imprevisível conforme o
+// arquivo, então tratamos os dois formatos sempre, independente da região
+// ou de como o Excel foi gerado.
+function excelSerialToDate(serial) {
+  const epoch = Date.UTC(1899, 11, 30); // Excel trata 1900 como bissexto por engano; esse epoch já compensa isso
+  const ms = epoch + serial * 86400000;
+  const d = new Date(ms);
+  return new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), d.getUTCHours(), d.getUTCMinutes());
+}
+
 function parseDateTimeStr(str) {
   // "18/06/2026 23:59" → Date com hora
-  if (!str) return null;
+  if (str === undefined || str === null || str === '') return null;
+
+  // Número serial do Excel (ex: 46215 ou 46215.999) em vez de texto formatado
+  if (typeof str === 'number') {
+    return str > 0 ? excelSerialToDate(str) : null;
+  }
+  const trimmed = String(str).trim();
+  if (/^\d+(\.\d+)?$/.test(trimmed)) {
+    const serial = parseFloat(trimmed);
+    if (!isNaN(serial) && serial > 0) return excelSerialToDate(serial);
+  }
+
   const m = String(str).match(/(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2})/);
   if (!m) {
     // só data sem hora
@@ -1132,6 +1157,22 @@ function parseDateTimeStr(str) {
     return new Date(+d[3], +d[2]-1, +d[1], 23, 59);
   }
   return new Date(+m[3], +m[2]-1, +m[1], +m[4], +m[5]);
+}
+
+// Formata a data prevista pra exibição, seja qual for o formato de origem
+// (texto "dd/mm/aaaa hh:mm" ou número serial do Excel). Mantém o comportamento
+// de sempre: se a hora for 23:59 (padrão de "só tem data"), mostra só dd/mm/aaaa.
+function formatPrazoDisplay(raw) {
+  if (raw === undefined || raw === null || raw === '') return '—';
+  const dt = parseDateTimeStr(raw);
+  if (!dt) return String(raw);
+  const dd = String(dt.getDate()).padStart(2, '0');
+  const mm = String(dt.getMonth() + 1).padStart(2, '0');
+  const yyyy = dt.getFullYear();
+  const hh = String(dt.getHours()).padStart(2, '0');
+  const mi = String(dt.getMinutes()).padStart(2, '0');
+  if (hh === '23' && mi === '59') return `${dd}/${mm}/${yyyy}`;
+  return `${dd}/${mm}/${yyyy} ${hh}:${mi}`;
 }
 
 function parseDateStr(str) {
@@ -1304,7 +1345,7 @@ function gerarHTMLCapa(cod, lider, rows, dataHoje, est, hj, ok, modo) {
     const cliente = r['Nome e Sobrenome Cliente'] || '—';
     const end = r['Endereço Completo'] || '—';
     const muni = r['Município'] || '—';
-    const prazo = (r['Data Prevista Finalização Trabalhos'] || '—').replace(' 23:59','');
+    const prazo = formatPrazoDisplay(r['Data Prevista Finalização Trabalhos']);
     const obs = r['Dica Localização'] || '';
     const lat = r['Latitude'] || '';
     const lng = r['Longitude'] || '';
@@ -1408,7 +1449,7 @@ function gerarHTMLCapa(cod, lider, rows, dataHoje, est, hj, ok, modo) {
     const codCliente = r['Código Cliente'] || '—';
     const cliente = r['Nome e Sobrenome Cliente'] || '—';
     const end = r['Endereço Completo'] || '—';
-    const prazo = (r['Data Prevista Finalização Trabalhos'] || '—').replace(' 23:59','');
+    const prazo = formatPrazoDisplay(r['Data Prevista Finalização Trabalhos']);
     const obs = r['Dica Localização'] || '';
     const lat = r['Latitude'] || '';
     const lng = r['Longitude'] || '';
@@ -1457,7 +1498,7 @@ function gerarHTMLCapa(cod, lider, rows, dataHoje, est, hj, ok, modo) {
           cliente: String(r['Nome e Sobrenome Cliente'] || '').replace(/\\/g,'').replace(/`/g,''),
           tipo:    String(r['Tipo Remessa WIN'] || r[' Tipo de Serviço'] || '').split(' - ')[0],
           end:     String(r['Endereço Completo'] || '').replace(/\\/g,'').replace(/`/g,''),
-          prazo:   String(r['Data Prevista Finalização Trabalhos'] || '').replace(' 23:59',''),
+          prazo:   formatPrazoDisplay(r['Data Prevista Finalização Trabalhos']),
           prio:    getPrioridade(r),
           color:   getPrioridade(r)==='est'?'#e53935':getPrioridade(r)==='hj'?'#ff9800':'#43a047'
         }))
@@ -2376,7 +2417,7 @@ function pgFiltrarModal() {
     const cod = r['Código Equipe'] || '—';
     const cliente = r['Nome e Sobrenome Cliente'] || '—';
     const end = r['Endereço Completo'] || '—';
-    const prazo = (r['Data Prevista Finalização Trabalhos'] || '—').replace(' 23:59','');
+    const prazo = formatPrazoDisplay(r['Data Prevista Finalização Trabalhos']);
     const muni = r['Município'] || '—';
     const lat = r['Latitude'] || '';
     const lng = r['Longitude'] || '';
@@ -2437,7 +2478,7 @@ function pgCopiarModal() {
     const cod = r['Código Equipe'] || '—';
     const cliente = r['Nome e Sobrenome Cliente'] || '—';
     const end = r['Endereço Completo'] || '—';
-    const prazo = (r['Data Prevista Finalização Trabalhos'] || '—').replace(' 23:59','');
+    const prazo = formatPrazoDisplay(r['Data Prevista Finalização Trabalhos']);
     const muni = r['Município'] || '—';
     const lat = r['Latitude'] || '';
     const lng = r['Longitude'] || '';
