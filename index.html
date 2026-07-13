@@ -919,6 +919,7 @@ const SUPERVISOR_MAP = {
 };
 
 function getSupervisor(cod) {
+  cod = String(cod || '');
   if (SUPERVISOR_MAP[cod]) return SUPERVISOR_MAP[cod];
   // Leste ainda não tem mapeamento por código exato de equipe — usa regra por prefixo/tipo
   if (cod.startsWith('ART')) return 'Airton';
@@ -2036,6 +2037,8 @@ function csSlug(nome) {
 }
 
 function csMatch(c, cod, muni) {
+  cod = String(cod || '');
+  muni = String(muni || '');
   return c.siglas.some(s => cod.startsWith(s) || cod.includes('-' + s + '-')) || muni.includes(c.nomeCompleto.toUpperCase());
 }
 
@@ -2345,10 +2348,10 @@ function pgFiltrarModal() {
   const q = document.getElementById('pg-modal-search').value.toLowerCase();
   const filtrado = q
     ? pgModalDados.filter(r =>
-        (r['Numero de Serviço']||'').toLowerCase().includes(q) ||
-        (r['Nome e Sobrenome Cliente']||'').toLowerCase().includes(q) ||
-        (r['Endereço Completo']||'').toLowerCase().includes(q) ||
-        (r['Código Equipe']||'').toLowerCase().includes(q)
+        String(r['Numero de Serviço']||'').toLowerCase().includes(q) ||
+        String(r['Nome e Sobrenome Cliente']||'').toLowerCase().includes(q) ||
+        String(r['Endereço Completo']||'').toLowerCase().includes(q) ||
+        String(r['Código Equipe']||'').toLowerCase().includes(q)
       )
     : pgModalDados;
 
@@ -2417,10 +2420,10 @@ function pgCopiarModal() {
   const q = document.getElementById('pg-modal-search').value.toLowerCase();
   const filtrado = q
     ? pgModalDados.filter(r =>
-        (r['Numero de Serviço']||'').toLowerCase().includes(q) ||
-        (r['Nome e Sobrenome Cliente']||'').toLowerCase().includes(q) ||
-        (r['Endereço Completo']||'').toLowerCase().includes(q) ||
-        (r['Código Equipe']||'').toLowerCase().includes(q)
+        String(r['Numero de Serviço']||'').toLowerCase().includes(q) ||
+        String(r['Nome e Sobrenome Cliente']||'').toLowerCase().includes(q) ||
+        String(r['Endereço Completo']||'').toLowerCase().includes(q) ||
+        String(r['Código Equipe']||'').toLowerCase().includes(q)
       )
     : pgModalDados;
 
