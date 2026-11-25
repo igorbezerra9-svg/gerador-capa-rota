@@ -3206,12 +3206,17 @@ function mxTabela(modo, rows, ctx, titulo, sub, cabecalho, niveis, prefixo, eixo
   const cols = ctx.cols;
   mxArvores[prefixo] = raiz;
   const desenhadas = [];
-  mxRenderizadas[prefixo] = { titulo, cabecalho, cols, nos: desenhadas, modo, eixo };
-  let h = '<div style="background:var(--white);border:0.5px solid var(--gray-200);border-radius:12px;overflow:hidden;margin-bottom:14px;">'
-    + '<div style="padding:12px 16px;border-bottom:0.5px solid var(--gray-200);display:flex;align-items:flex-start;gap:12px;flex-wrap:wrap;">'
+  const emCampo = modo === 'campo';
+  const rotModo = emCampo ? '🚚 Enviado a campo' : '📦 Carteira';
+  const corModo = emCampo ? '#14487e' : '#573a9c';
+  mxRenderizadas[prefixo] = { titulo: rotModo + ' — ' + titulo, cabecalho, cols, nos: desenhadas, modo, eixo };
+  let h = '<div style="background:var(--white);border:1px solid ' + (emCampo ? '#cfe2f7' : '#e6dff5')
+    + ';border-radius:12px;overflow:hidden;margin-bottom:10px;">'
+    + '<div style="padding:10px 14px;border-bottom:1px solid ' + (emCampo ? '#e4eff9' : '#ece5f7')
+    + ';background:' + (emCampo ? '#f3f8ff' : '#faf7ff') + ';display:flex;align-items:flex-start;gap:12px;flex-wrap:wrap;">'
     + '<div style="flex:1;min-width:220px;">'
-    + '<div style="font-size:11px;font-weight:700;color:var(--gray-400);text-transform:uppercase;letter-spacing:.8px;">' + titulo + '</div>'
-    + (sub ? '<div style="font-size:11px;color:var(--gray-400);margin-top:3px;font-weight:400;text-transform:none;letter-spacing:0;">' + sub + '</div>' : '')
+    + '<div style="font-size:13.5px;font-weight:800;color:' + corModo + ';">' + rotModo + '</div>'
+    + (sub ? '<div style="font-size:11px;color:var(--gray-400);margin-top:2px;">' + sub + '</div>' : '')
     + '</div>'
     + '<div style="display:flex;gap:6px;flex-wrap:wrap;">'
     + '<button class="pg-tipo-btn" onclick="mxAbrirFechar(\'' + prefixo + '\',false)" title="Fecha todos os niveis">&#8863; Recolher</button>'
@@ -3305,6 +3310,10 @@ function mxCarimbo() {
 // MESMAS COLUNAS de vencimento nos dois. As colunas saem da base inteira (a
 // carteira ja contem o que esta em campo), e e isso que deixa comparar os dois
 // blocos batendo o olho na mesma coluna.
+// A tela e montada por CORTE, nao por bloco: "por regiao" traz enviado a
+// campo e carteira uma embaixo da outra, com as mesmas linhas e as mesmas
+// colunas, e so depois vem "por processo" do mesmo jeito. E assim que da pra
+// ler Sul em campo contra Sul em carteira sem tirar o olho da coluna.
 function mxRender() {
   mxNodos = [];
   mxArvores = {};
@@ -3313,39 +3322,60 @@ function mxRender() {
   const campo = carteira.filter(mxEmCampo);
   const ctx = mxColunas(mxOcultarVenc ? mxSoDaquiPraFrente(carteira) : carteira);
   mxCtxAtual = ctx;
-  let h = mxBloco('campo', campo, ctx) + mxBloco('carteira', carteira, ctx) + mxHistBloco(ctx);
+  mxGuardarBloco('campo', campo, ctx);
+  mxGuardarBloco('carteira', carteira, ctx);
+  const h = mxResumoTopo(ctx)
+    + mxGrupo(ctx, 'Por região e unidade operativa',
+        'Clique num número pra ver as OS; clique na linha pra abrir o nível de baixo.',
+        'Região · unidade · município',
+        [r => MX_REG_ROT[r.__reg] || r.__reg, r => r.__uni, r => r['Município'] || '—'],
+        'A', 'C', 'por-regiao')
+    + mxGrupo(ctx, 'Por processo',
+        'Novas Conexões, Gestão Inadimplências e Gestão Perdas do jeito que o eOrder classifica. Clique na linha pra abrir por tipo de serviço.',
+        'Processo · tipo de serviço',
+        [r => MX_PROC_ROT[mxProcDe(r)] || 'Outros', r => mxSubDe(r)],
+        'B', 'D', 'por-processo')
+    + mxHistBloco(ctx);
   document.getElementById('mx-tabelas').innerHTML = h;
   document.getElementById('mx-atualizado').textContent = mxCarimbo();
 }
 
-function mxBloco(modo, todas, ctx) {
-  const rows = mxOcultarVenc ? mxSoDaquiPraFrente(todas) : todas;
-  MX_BLOCOS[modo] = { rows, todas, ctx };
-  const emCampo = modo === 'campo';
-  const recorte = mxOcultarVenc ? ' Só o que vence de hoje pra frente.' : '';
-  const sub = (emCampo
-    ? 'O que já saiu pra equipe — Enviado ao Campo, Em execução e Designado.'
-    : 'A base inteira: com equipe e sem equipe (programáveis, a reprogramar).') + recorte;
-  let h = '<div style="border:1px solid ' + (emCampo ? '#cfe2f7' : '#e6dff5') + ';background:'
-    + (emCampo ? '#f6faff' : '#fbf9ff') + ';border-radius:16px;padding:14px;margin-bottom:18px;">'
-    + '<div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:10px;">'
-    + '<div style="font-size:16px;font-weight:800;color:' + (emCampo ? '#14487e' : '#573a9c') + ';">'
-    + (emCampo ? '🚚 Enviado a campo' : '📦 Carteira') + '</div>'
-    + '<div style="font-size:11px;color:var(--gray-400);">' + sub + '</div></div>'
-    + '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:12px;">'
-    + mxKPIs(modo, rows, ctx, todas) + '</div>';
-  if (!emCampo) h += mxAviso();
-  h += mxTabela(modo, rows, ctx, 'Por região e unidade operativa',
-    'Clique num número pra ver as OS; clique na linha pra abrir o nível de baixo.',
-    'Região · unidade · município',
-    [r => MX_REG_ROT[r.__reg] || r.__reg, r => r.__uni, r => r['Município'] || '—'],
-    emCampo ? 'A' : 'C', 'por-regiao');
-  h += mxTabela(modo, rows, ctx, 'Por processo',
-    'Novas Conexões, Gestão Inadimplências e Gestão Perdas do jeito que o eOrder classifica. Clique na linha pra abrir por tipo de serviço.',
-    'Processo · tipo de serviço',
-    [r => MX_PROC_ROT[mxProcDe(r)] || 'Outros', r => mxSubDe(r)],
-    emCampo ? 'B' : 'D', 'por-processo');
-  return h + '</div>';
+function mxGuardarBloco(modo, todas, ctx) {
+  MX_BLOCOS[modo] = { rows: mxOcultarVenc ? mxSoDaquiPraFrente(todas) : todas, todas, ctx };
+}
+
+// Um corte: a mesma pergunta respondida duas vezes, em campo e na carteira.
+function mxGrupo(ctx, titulo, sub, cabecalho, niveis, prefCampo, prefCarteira, eixo) {
+  return '<div style="border:1px solid var(--gray-200);background:#f4f7fb;border-radius:16px;padding:12px;margin-bottom:18px;">'
+    + '<div style="font-size:11px;font-weight:800;color:#6b7f99;text-transform:uppercase;letter-spacing:1.2px;margin:2px 6px 10px;">'
+    + titulo + '</div>'
+    + mxTabela('campo', MX_BLOCOS.campo.rows, ctx, titulo, sub, cabecalho, niveis, prefCampo, eixo)
+    + mxTabela('carteira', MX_BLOCOS.carteira.rows, ctx, titulo, sub, cabecalho, niveis, prefCarteira, eixo)
+    + '</div>';
+}
+
+// Os KPIs dos dois blocos ficam no topo, antes das tabelas.
+function mxResumoTopo(ctx) {
+  let h = '';
+  ['campo', 'carteira'].forEach(modo => {
+    const b = MX_BLOCOS[modo];
+    const emCampo = modo === 'campo';
+    const recorte = mxOcultarVenc ? ' Só o que vence de hoje pra frente.' : '';
+    const sub = (emCampo
+      ? 'O que já saiu pra equipe — Enviado ao Campo, Em execução e Designado.'
+      : 'A base inteira: com equipe e sem equipe (programáveis, a reprogramar).') + recorte;
+    h += '<div style="border:1px solid ' + (emCampo ? '#cfe2f7' : '#e6dff5') + ';background:'
+      + (emCampo ? '#f6faff' : '#fbf9ff') + ';border-radius:16px;padding:12px 14px;margin-bottom:12px;">'
+      + '<div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:8px;">'
+      + '<div style="font-size:15px;font-weight:800;color:' + (emCampo ? '#14487e' : '#573a9c') + ';">'
+      + (emCampo ? '🚚 Enviado a campo' : '📦 Carteira') + '</div>'
+      + '<div style="font-size:11px;color:var(--gray-400);">' + sub + '</div></div>'
+      + '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;">'
+      + mxKPIs(modo, b.rows, ctx, b.todas) + '</div>';
+    if (!emCampo) h += '<div style="margin-top:10px;">' + mxAviso() + '</div>';
+    h += '</div>';
+  });
+  return h;
 }
 
 // ── Detalhe ───────────────────────────────────────────────────────────────
