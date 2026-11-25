@@ -769,6 +769,7 @@
       <button class="pg-tipo-btn" id="mx-reg-REG" onclick="mxSetReg('REG')" style="background:#e8f4fd;color:#1565c0;border-color:#90caf9;">Reguladas</button>
       <button class="pg-tipo-btn" id="mx-reg-NREG" onclick="mxSetReg('NREG')" style="background:#fff3e8;color:#bf360c;border-color:#ffb74d;">Não reguladas</button>
       <div style="margin-left:auto;display:flex;gap:10px;align-items:center;">
+        <button class="pg-tipo-btn" id="mx-venc-btn" onclick="mxToggleVencidas()" title="Tira da tabela tudo que venceu antes de hoje">&#128065; Ocultar vencidas</button>
         <span id="mx-atualizado" style="font-size:10px;color:var(--gray-400);"></span>
         <button class="pg-tipo-btn" onclick="mxRecarregar()" title="Rebaixa os três relatórios da nuvem">&#8635; Atualizar</button>
       </div>
@@ -2894,6 +2895,10 @@ let mxCarregando = false;
 let mxNodos = [];          // nós da tabela, pra abrir o detalhe ao clicar
 let mxCtxAtual = null;
 let mxLinhasAtuais = [];
+let mxOcultarVenc = false;   // esconde o que ja venceu: so de hoje pra frente
+let mxTodasAtuais = [];      // recorte antes de tirar as vencidas
+let mxArvores = {};          // prefixo da tabela -> arvore inteira (pra expandir tudo)
+let mxRenderizadas = {};     // prefixo -> o que foi desenhado (pra PNG e Excel)
 
 function mxNorm(s) {
   return String(s == null ? '' : s).normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().trim();
@@ -3033,14 +3038,21 @@ function mxFiltrar() {
   return out;
 }
 
+// Tira o que ja venceu. Usado quando o botao "Ocultar vencidas" esta ligado:
+// a tabela, os totais e os KPIs passam todos a falar so de hoje pra frente.
+function mxSoDaquiPraFrente(rows) {
+  const hojeK = mxKeyDe(hoje);
+  return rows.filter(r => { const k = mxDiaKey(r); return !k || k >= hojeK; });
+}
+
 function mxColunas(rows) {
   const hojeK = mxKeyDe(hoje);
   const dias = {};
-  let sem = 0;
+  let sem = 0, vencidas = 0;
   rows.forEach(r => {
     const k = mxDiaKey(r);
     if (!k) { sem++; return; }
-    if (k < hojeK) return;
+    if (k < hojeK) { vencidas++; return; }
     dias[k] = (dias[k] || 0) + 1;
   });
   const fut = Object.keys(dias).sort();
@@ -3048,7 +3060,9 @@ function mxColunas(rows) {
   const setFut = {};
   mostra.forEach(k => { setFut[k] = 1; });
 
-  const cols = [{ k:'__venc', l1:'Vencidas', l2:'atrasadas', cor:'#c0392b', destaque:'#fdecea' }];
+  // Sem nenhuma vencida no recorte (filtro ligado, por exemplo) a coluna sai fora.
+  const cols = [];
+  if (vencidas) cols.push({ k:'__venc', l1:'Vencidas', l2:'atrasadas', cor:'#c0392b', destaque:'#fdecea' });
   mostra.forEach(k => {
     const rot = mxDiaRot(k);
     const ehHoje = k === hojeK;
@@ -3148,14 +3162,15 @@ function mxLinhaHTML(no, cols, temFilhos, aberto) {
   return h + '</tr>';
 }
 
-function mxCorpoHTML(no, cols) {
+function mxCorpoHTML(no, cols, desenhadas) {
   let h = '';
   mxFilhosOrdenados(no).forEach(f => {
     const temFilhos = Object.keys(f.filhos).length > 0;
     const aberto = temFilhos && mxEstaAberto(f);
     mxRegistrar(f);
+    if (desenhadas) desenhadas.push(f);
     h += mxLinhaHTML(f, cols, temFilhos, aberto);
-    if (aberto) h += mxCorpoHTML(f, cols);
+    if (aberto) h += mxCorpoHTML(f, cols, desenhadas);
   });
   return h;
 }
@@ -3163,10 +3178,21 @@ function mxCorpoHTML(no, cols) {
 function mxTabela(rows, ctx, titulo, sub, cabecalho, niveis, prefixo) {
   const raiz = mxAgrupar(rows, ctx, niveis, prefixo);
   const cols = ctx.cols;
+  mxArvores[prefixo] = raiz;
+  const desenhadas = [];
+  mxRenderizadas[prefixo] = { titulo, cabecalho, cols, nos: desenhadas };
   let h = '<div style="background:var(--white);border:0.5px solid var(--gray-200);border-radius:12px;overflow:hidden;margin-bottom:14px;">'
-    + '<div style="padding:12px 16px;border-bottom:0.5px solid var(--gray-200);">'
+    + '<div style="padding:12px 16px;border-bottom:0.5px solid var(--gray-200);display:flex;align-items:flex-start;gap:12px;flex-wrap:wrap;">'
+    + '<div style="flex:1;min-width:220px;">'
     + '<div style="font-size:11px;font-weight:700;color:var(--gray-400);text-transform:uppercase;letter-spacing:.8px;">' + titulo + '</div>'
     + (sub ? '<div style="font-size:11px;color:var(--gray-400);margin-top:3px;font-weight:400;text-transform:none;letter-spacing:0;">' + sub + '</div>' : '')
+    + '</div>'
+    + '<div style="display:flex;gap:6px;flex-wrap:wrap;">'
+    + '<button class="pg-tipo-btn" onclick="mxAbrirFechar(\'' + prefixo + '\',false)" title="Fecha todos os niveis">&#8863; Recolher</button>'
+    + '<button class="pg-tipo-btn" onclick="mxAbrirFechar(\'' + prefixo + '\',true)" title="Abre todos os niveis">&#8862; Expandir</button>'
+    + '<button class="pg-tipo-btn" onclick="mxCopiarTabela(\'' + prefixo + '\')" title="Copia pra colar direto no Excel">&#128203; Excel</button>'
+    + '<button class="pg-tipo-btn" onclick="mxBaixarPNG(\'' + prefixo + '\')" title="Baixa a tabela como imagem">&#128247; PNG</button>'
+    + '</div>'
     + '</div><div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:12px;white-space:nowrap;">'
     + '<thead><tr style="background:#0d1b2a;color:#fff;">'
     + '<th style="padding:8px 12px;text-align:left;font-size:9px;text-transform:uppercase;letter-spacing:1px;position:sticky;left:0;background:#0d1b2a;z-index:1;">' + cabecalho + '</th>';
@@ -3176,8 +3202,9 @@ function mxTabela(rows, ctx, titulo, sub, cabecalho, niveis, prefixo) {
   });
   h += '<th style="padding:6px 12px;text-align:center;font-size:9px;text-transform:uppercase;letter-spacing:1px;background:#e8a020;color:#0d1b2a;">Total</th>';
   h += '</tr></thead><tbody>';
-  h += mxCorpoHTML(raiz, cols);
+  h += mxCorpoHTML(raiz, cols, desenhadas);
   mxRegistrar(raiz);
+  desenhadas.push(raiz);
   h += mxLinhaHTML(raiz, cols, false, false);
   return h + '</tbody></table></div></div>';
 }
@@ -3190,24 +3217,29 @@ function mxCard(rot, valor, sub, cor, fundo, acao) {
     + '<div style="font-size:11px;color:' + cor + ';opacity:.65;margin-top:4px;">' + sub + '</div></div>';
 }
 
-function mxKPIs(rows, ctx) {
-  let venc = 0, hj = 0, campo = 0;
+// `rows` e o que esta na tela; `todas` inclui as vencidas mesmo quando o
+// botao "Ocultar vencidas" esta ligado -- o card delas nunca some, so sai
+// das tabelas e dos totais.
+function mxKPIs(rows, ctx, todas) {
+  let hj = 0, campo = 0;
   const porProc = { NC:0, IN:0, PE:0 };
   rows.forEach(r => {
-    const k = mxDiaKey(r);
-    if (k && k < ctx.hojeK) venc++;
-    else if (k === ctx.hojeK) hj++;
+    if (mxDiaKey(r) === ctx.hojeK) hj++;
     if (mxEmCampo(r)) campo++;
     const p = mxProcDe(r);
     if (porProc[p] !== undefined) porProc[p]++;
   });
+  let venc = 0;
+  todas.forEach(r => { const k = mxDiaKey(r); if (k && k < ctx.hojeK) venc++; });
   const tot = rows.length || 1;
   const pct = n => ((n / tot) * 100).toFixed(1) + '%';
   let h = '';
   h += mxCard(mxModo === 'campo' ? '🚚 Em campo' : '📦 Carteira total', rows.length,
-    mxModo === 'campo' ? 'com equipe · 3 regiões' : 'todos os estados · 3 regiões',
+    (mxModo === 'campo' ? 'com equipe · 3 regiões' : 'todos os estados · 3 regiões') + (mxOcultarVenc ? ' · sem as vencidas' : ''),
     '#1565c0', '#eef3fb', "mxAbrirKPI('tot')");
-  h += mxCard('⚠ Vencidas', venc, pct(venc) + ' · clique pra ver', '#c0392b', '#fdecea', "mxAbrirKPI('venc')");
+  h += mxCard('⚠ Vencidas', venc,
+    mxOcultarVenc ? 'fora da tabela · clique pra ver' : ((venc / (todas.length || 1)) * 100).toFixed(1) + '% · clique pra ver',
+    '#c0392b', '#fdecea', "mxAbrirKPI('venc')");
   h += mxCard('⏰ Vencem hoje', hj, pct(hj) + ' · clique pra ver', '#d35400', '#fff3e8', "mxAbrirKPI('hoje')");
   if (mxModo === 'carteira') {
     h += mxCard('🚚 Já em campo', campo, pct(campo) + ' do total', '#1a7a40', '#eaf7ef', "mxAbrirKPI('campo')");
@@ -3242,19 +3274,25 @@ function mxCarimbo() {
 }
 
 function mxRender() {
-  const rows = mxFiltrar();
+  const todas = mxFiltrar();
+  const rows = mxOcultarVenc ? mxSoDaquiPraFrente(todas) : todas;
   const ctx = mxColunas(rows);
   mxNodos = [];
+  mxArvores = {};
+  mxRenderizadas = {};
   mxCtxAtual = ctx;
   mxLinhasAtuais = rows;
-  document.getElementById('mx-kpis').innerHTML = mxKPIs(rows, ctx);
+  mxTodasAtuais = todas;
+  document.getElementById('mx-kpis').innerHTML = mxKPIs(rows, ctx, todas);
   document.getElementById('mx-aviso').innerHTML = mxAviso();
-  const subT = mxModo === 'campo'
-    ? 'Só o que já está com equipe (Enviado ao Campo, Em execução, Designado). Clique num número pra ver as OS; clique na linha pra abrir por município.'
-    : 'A base inteira, com equipe ou não. Clique num número pra ver as OS; clique na linha pra abrir por município.';
+  const recorte = mxOcultarVenc ? ' Mostrando só o que vence de hoje pra frente.' : '';
+  const subT = (mxModo === 'campo'
+    ? 'Só o que já está com equipe (Enviado ao Campo, Em execução, Designado).'
+    : 'A base inteira, com equipe ou não.') + recorte
+    + ' Clique num número pra ver as OS; clique na linha pra abrir o nível de baixo.';
   let h = mxTabela(rows, ctx, 'Por região e unidade operativa', subT, 'Região · unidade · município',
     [r => MX_REG_ROT[r.__reg] || r.__reg, r => r.__uni, r => r['Município'] || '—'], 'A');
-  h += mxTabela(rows, ctx, 'Por processo', 'Novas Conexões, Gestão Inadimplências e Gestão Perdas do jeito que o eOrder classifica. Clique na linha pra abrir por tipo de serviço.',
+  h += mxTabela(rows, ctx, 'Por processo', 'Novas Conexões, Gestão Inadimplências e Gestão Perdas do jeito que o eOrder classifica.' + recorte + ' Clique na linha pra abrir por tipo de serviço.',
     'Processo · tipo de serviço',
     [r => MX_PROC_ROT[mxProcDe(r)] || 'Outros', r => mxSubDe(r)], 'B');
   document.getElementById('mx-tabelas').innerHTML = h;
@@ -3293,7 +3331,8 @@ function mxAbrirKPI(tipo) {
   const rows = mxLinhasAtuais, ctx = mxCtxAtual;
   if (!ctx) return;
   let linhas = rows, rot = mxModo === 'campo' ? 'Em campo' : 'Carteira';
-  if (tipo === 'venc') { linhas = rows.filter(r => { const k = mxDiaKey(r); return k && k < ctx.hojeK; }); rot = 'Vencidas'; }
+  // as vencidas saem da lista completa: o card continua valendo com o filtro ligado
+  if (tipo === 'venc') { linhas = mxTodasAtuais.filter(r => { const k = mxDiaKey(r); return k && k < ctx.hojeK; }); rot = 'Vencidas'; }
   else if (tipo === 'hoje') { linhas = rows.filter(r => mxDiaKey(r) === ctx.hojeK); rot = 'Vencem hoje'; }
   else if (tipo === 'campo') { linhas = rows.filter(mxEmCampo); rot = 'Já em campo'; }
   else if (tipo === 'semequipe') { linhas = rows.filter(r => !mxEmCampo(r)); rot = 'Sem equipe'; }
@@ -3303,6 +3342,186 @@ function mxAbrirKPI(tipo) {
     rot = MX_PROC_ROT[p];
   }
   mxAbrirLista(linhas, rot, '3 regiões · ' + (mxModo === 'campo' ? 'em campo' : 'carteira'));
+}
+
+// ── Ocultar vencidas ──────────────────────────────────────────────────────
+function mxToggleVencidas() {
+  mxOcultarVenc = !mxOcultarVenc;
+  const b = document.getElementById('mx-venc-btn');
+  if (b) {
+    b.classList.toggle('active', mxOcultarVenc);
+    b.innerHTML = (mxOcultarVenc ? '\u{1F441} Mostrar vencidas' : '\u{1F441} Ocultar vencidas');
+  }
+  mxRender();
+}
+
+// ── Recolher / expandir ───────────────────────────────────────────────────
+function mxAbrirFechar(prefixo, abrir) {
+  const raiz = mxArvores[prefixo];
+  if (!raiz) return;
+  (function anda(no) {
+    Object.keys(no.filhos).forEach(k => {
+      const f = no.filhos[k];
+      if (Object.keys(f.filhos).length) mxAberto[f.chave] = abrir;
+      anda(f);
+    });
+  })(raiz);
+  mxRender();
+}
+
+// ── Copiar pro Excel ──────────────────────────────────────────────────────
+// TSV: colando no Excel cada coluna cai na sua celula sozinha.
+function mxLinhasExport(prefixo) {
+  const t = mxRenderizadas[prefixo];
+  if (!t) return null;
+  const cab = [t.cabecalho].concat(t.cols.map(c => c.l1 + (c.l2 ? ' (' + c.l2 + ')' : ''))).concat(['Total']);
+  const linhas = t.nos.map(no => {
+    const nivel = Math.max(no.nivel, 0);
+    const rot = (no.nivel < 0 ? '' : '    '.repeat(nivel)) + no.rot;
+    return [rot].concat(t.cols.map(c => no.cont[c.k] || 0)).concat([no.total]);
+  });
+  return { titulo: t.titulo, cab, linhas, cols: t.cols, cabecalho: t.cabecalho, nos: t.nos };
+}
+
+function mxContexto() {
+  const partes = [mxModo === 'campo' ? 'Enviado a campo' : 'Carteira'];
+  if (mxProc) partes.push(MX_PROC_ROT[mxProc]);
+  if (mxReg) partes.push(mxReg === 'REG' ? 'Reguladas' : 'Não reguladas');
+  if (mxOcultarVenc) partes.push('sem as vencidas');
+  return partes.join(' · ');
+}
+
+function mxCopiarTabela(prefixo) {
+  const d = mxLinhasExport(prefixo);
+  if (!d) return;
+  const texto = [d.titulo + ' — ' + mxContexto() + ' — ' + mxCarimbo()]
+    .concat([d.cab.join('\t')])
+    .concat(d.linhas.map(l => l.join('\t')))
+    .join('\n');
+  const pronto = () => showToast('✔ Tabela copiada — cole no Excel com Ctrl+V', 2500);
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(texto).then(pronto).catch(() => mxCopiarFallback(texto, pronto));
+  } else {
+    mxCopiarFallback(texto, pronto);
+  }
+}
+
+function mxCopiarFallback(texto, pronto) {
+  const ta = document.createElement('textarea');
+  ta.value = texto;
+  ta.style.position = 'fixed';
+  ta.style.opacity = '0';
+  document.body.appendChild(ta);
+  ta.select();
+  try { document.execCommand('copy'); pronto(); }
+  catch (e) { showToast('Não consegui copiar: ' + e.message, 4000); }
+  document.body.removeChild(ta);
+}
+
+// ── PNG ───────────────────────────────────────────────────────────────────
+// Desenhado na mao no canvas em vez de usar biblioteca de screenshot: a
+// tabela e uma grade de numeros, entao sai nitido, sem dependencia nova e
+// sem depender de como o navegador renderizou a pagina.
+function mxBaixarPNG(prefixo) {
+  const cv = mxCanvasTabela(prefixo);
+  if (!cv) return;
+  const nome = 'capa-rota_' + (mxModo === 'campo' ? 'em-campo' : 'carteira') + '_'
+    + (prefixo === 'A' ? 'por-regiao' : 'por-processo') + '_'
+    + hoje.toLocaleDateString('pt-BR').replace(/\//g, '-') + '.png';
+  cv.toBlob(b => {
+    const url = URL.createObjectURL(b);
+    const a = document.createElement('a');
+    a.href = url; a.download = nome; a.click();
+    URL.revokeObjectURL(url);
+    showToast('✔ ' + nome, 3000);
+  });
+}
+
+// Desenha a tabela num canvas e devolve ele. Separado do download pra poder
+// conferir a imagem sem baixar nada.
+function mxCanvasTabela(prefixo) {
+  const d = mxLinhasExport(prefixo);
+  if (!d) return null;
+  const esc = 2;                       // 2x pra ficar nitido em tela boa
+  const fonte = 'Segoe UI, system-ui, -apple-system, sans-serif';
+  const medidor = document.createElement('canvas').getContext('2d');
+
+  medidor.font = '700 13px ' + fonte;
+  let lRot = 150;
+  d.linhas.forEach(l => { lRot = Math.max(lRot, medidor.measureText(l[0]).width + 28); });
+  lRot = Math.max(lRot, medidor.measureText(d.cabecalho).width + 28);
+
+  const lCol = 74, lTot = 82;
+  const alturaCab = 46, alturaLinha = 28, topo = 64, rodape = 34;
+  const larg = lRot + d.cols.length * lCol + lTot;
+  const alt = topo + alturaCab + d.linhas.length * alturaLinha + rodape;
+
+  const cv = document.createElement('canvas');
+  cv.width = larg * esc;
+  cv.height = alt * esc;
+  const c = cv.getContext('2d');
+  c.scale(esc, esc);
+  c.textBaseline = 'middle';
+
+  // cabecalho da imagem
+  c.fillStyle = '#fff'; c.fillRect(0, 0, larg, alt);
+  c.fillStyle = '#0d1b2a'; c.fillRect(0, 0, larg, topo);
+  c.fillStyle = '#e8a020'; c.fillRect(0, topo - 3, larg, 3);
+  c.fillStyle = '#fff'; c.font = '700 15px ' + fonte;
+  c.fillText(d.titulo, 16, 24);
+  c.fillStyle = '#8097b8'; c.font = '400 11px ' + fonte;
+  c.fillText(mxContexto(), 16, 44);
+
+  // cabecalho da tabela
+  let y = topo;
+  c.fillStyle = '#0d1b2a'; c.fillRect(0, y, larg, alturaCab);
+  c.fillStyle = '#e8a020'; c.fillRect(lRot + d.cols.length * lCol, y, lTot, alturaCab);
+  c.fillStyle = '#fff'; c.font = '700 10px ' + fonte; c.textAlign = 'left';
+  c.fillText(d.cabecalho.toUpperCase(), 14, y + alturaCab / 2);
+  c.textAlign = 'center';
+  d.cols.forEach((col, i) => {
+    const cx = lRot + i * lCol + lCol / 2;
+    c.fillStyle = '#fff'; c.font = '700 10px ' + fonte;
+    c.fillText(col.l1.toUpperCase(), cx, y + (col.l2 ? 16 : alturaCab / 2));
+    if (col.l2) { c.fillStyle = '#9fb3cc'; c.font = '400 9px ' + fonte; c.fillText(col.l2, cx, y + 31); }
+  });
+  c.fillStyle = '#0d1b2a'; c.font = '700 10px ' + fonte;
+  c.fillText('TOTAL', lRot + d.cols.length * lCol + lTot / 2, y + alturaCab / 2);
+  y += alturaCab;
+
+  // linhas
+  d.linhas.forEach((l, i) => {
+    const no = d.nos[i];
+    const fundo = no.nivel < 0 ? '#f2f6fc' : no.nivel === 0 ? '#fafcff' : '#fff';
+    c.fillStyle = fundo; c.fillRect(0, y, larg, alturaLinha);
+    d.cols.forEach((col, j) => {
+      if (col.destaque) { c.fillStyle = col.destaque; c.fillRect(lRot + j * lCol, y, lCol, alturaLinha); }
+    });
+    c.fillStyle = '#fdf6e8'; c.fillRect(lRot + d.cols.length * lCol, y, lTot, alturaLinha);
+    c.strokeStyle = '#eef2f8'; c.lineWidth = 1;
+    c.beginPath(); c.moveTo(0, y + alturaLinha + .5); c.lineTo(larg, y + alturaLinha + .5); c.stroke();
+
+    const peso = no.nivel <= 0 ? 700 : no.nivel === 1 ? 600 : 400;
+    const corRot = no.nivel <= 0 ? '#0d1b2a' : no.nivel === 1 ? '#2a3a50' : '#6b7f99';
+    c.textAlign = 'left'; c.fillStyle = corRot; c.font = peso + ' 12px ' + fonte;
+    c.fillText(l[0], 14, y + alturaLinha / 2);
+
+    c.textAlign = 'center';
+    d.cols.forEach((col, j) => {
+      const n = no.cont[col.k] || 0;
+      c.fillStyle = n ? col.cor : '#d4dbe6';
+      c.font = (n ? '700' : '400') + ' 12px ' + fonte;
+      c.fillText(n ? String(n) : '·', lRot + j * lCol + lCol / 2, y + alturaLinha / 2);
+    });
+    c.fillStyle = '#1a2535'; c.font = '800 12px ' + fonte;
+    c.fillText(String(no.total), lRot + d.cols.length * lCol + lTot / 2, y + alturaLinha / 2);
+    y += alturaLinha;
+  });
+
+  c.textAlign = 'left'; c.fillStyle = '#8097b8'; c.font = '400 10px ' + fonte;
+  c.fillText('Gerador de Capa de Rota · DESUL Sul — Grupo Cosampa · ' + mxCarimbo(), 14, y + 18);
+
+  return cv;
 }
 
 // ── Filtros ───────────────────────────────────────────────────────────────
