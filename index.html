@@ -658,8 +658,7 @@
 
   <!-- sub-abas do painel -->
   <div style="display:flex;gap:4px;border-bottom:1px solid var(--gray-200);margin-bottom:18px;flex-wrap:wrap;">
-    <button class="pg-sub-btn active" id="pg-sub-campo" onclick="pgSetView('campo')">&#128197; Enviado a campo por dia</button>
-    <button class="pg-sub-btn" id="pg-sub-carteira" onclick="pgSetView('carteira')">&#128230; Carteira</button>
+    <button class="pg-sub-btn active" id="pg-sub-dia" onclick="pgSetView('dia')">&#128197; Enviado a campo &amp; carteira</button>
     <button class="pg-sub-btn" id="pg-sub-equipes" onclick="pgSetView('equipes')">&#128119; Equipes</button>
   </div>
 
@@ -775,8 +774,22 @@
       </div>
     </div>
 
-    <div id="mx-kpis" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:14px;"></div>
-    <div id="mx-aviso"></div>
+    <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center;">
+      <span style="font-size:11px;color:var(--gray-400);font-weight:700;text-transform:uppercase;letter-spacing:1px;">Dias na tabela:</span>
+      <button class="pg-tipo-btn active" id="mx-dias-7" onclick="mxSetDias(7)">7</button>
+      <button class="pg-tipo-btn" id="mx-dias-14" onclick="mxSetDias(14)">14</button>
+      <button class="pg-tipo-btn" id="mx-dias-30" onclick="mxSetDias(30)">30</button>
+      <button class="pg-tipo-btn" id="mx-dias-0" onclick="mxSetDias(0)">Tudo</button>
+      <span style="width:14px;"></span>
+      <span style="font-size:11px;color:var(--gray-400);font-weight:700;text-transform:uppercase;letter-spacing:1px;">Comparar com:</span>
+      <select id="mx-hist-sel" onchange="mxHistEscolher(this.value)" style="font-size:11px;padding:5px 8px;border:1px solid var(--gray-200);border-radius:8px;background:var(--white);color:var(--gray-600);cursor:pointer;">
+        <option value="">&mdash; sem compara&ccedil;&atilde;o &mdash;</option>
+      </select>
+      <div style="margin-left:auto;display:flex;gap:10px;align-items:center;">
+        <button class="pg-tipo-btn" onclick="histSalvarAgora()" title="Guarda no hist&oacute;rico a situa&ccedil;&atilde;o de agora, pra poder comparar nos pr&oacute;ximos dias">&#128248; Salvar foto de hoje</button>
+      </div>
+    </div>
+
     <div id="mx-tabelas"></div>
   </div>
 </div>
@@ -2742,6 +2755,11 @@ async function publicarNuvem(regiao) {
     if (res.ok || res.status === 201 || res.status === 200) {
       showToast('✔ Publicado! ' + regiao + ' atualizado na nuvem', 3000);
       checarTimestamps();
+      // Primeiro envio do dia dessa regiao vira a foto da manha. O envio da
+      // tarde nao mexe mais nela -- e isso que deixa comparar os dias depois.
+      histGravar(regiao, allData, false).then(st => {
+        if (st === 'ok') showToast('📸 Foto de ' + regiao + ' guardada no histórico', 3000);
+      });
     } else {
       const err = await res.text();
       showToast('Erro: ' + err, 4000);
@@ -2875,7 +2893,8 @@ const MX_REG_ROT = { Sul:'🌍 Sul', CentroSul:'🌎 Centro Sul', Leste:'🌏 Le
 // "Em campo" = já saiu pra equipe. 'A Reprogramar' NÃO entra: voltou pra mesa.
 const MX_ESTADOS_CAMPO = ['enviado ao campo', 'em execucao', 'designado'];
 
-const MX_MAX_DIAS = 7;   // colunas de dia; o que passar disso vira "Depois"
+const MX_MAX_DIAS = 7;   // colunas de dia que a tela abre por padrao
+let mxDias = MX_MAX_DIAS;   // quantas colunas de dia mostrar; 0 = todas
 
 const MX_PROC_ROT = { NC:'Novas Conexões', IN:'Gestão Inadimplências', PE:'Gestão Perdas' };
 const MX_PROC_COR = { NC:'#1565c0', IN:'#c0392b', PE:'#8e44ad' };
@@ -2887,17 +2906,19 @@ const MX_ORDEM = {
   'Corte':0, 'Religação':1, 'Normalizações':0, '[Medidas Técnicas]':1
 };
 
-let mxModo = 'campo';      // 'campo' | 'carteira'
 let mxProc = '';           // '' | NC | IN | PE
 let mxReg  = '';           // '' | REG | NREG
 let mxAberto = {};         // chave da linha -> true/false (expandida)
 let mxCarregando = false;
 let mxNodos = [];          // nós da tabela, pra abrir o detalhe ao clicar
 let mxCtxAtual = null;
-let mxLinhasAtuais = [];
 let mxOcultarVenc = false;   // esconde o que ja venceu: so de hoje pra frente
-let mxTodasAtuais = [];      // recorte antes de tirar as vencidas
 let mxArvores = {};          // prefixo da tabela -> arvore inteira (pra expandir tudo)
+// A tela tem dois blocos: 'campo' em cima, 'carteira' embaixo. Cada um guarda
+// o proprio recorte pra que os KPIs e o detalhe saibam de quem estao falando.
+const MX_BLOCOS = {};
+let mxCtxBuild = null;       // de qual bloco e a tabela que esta sendo montada
+let mxModoBuild = 'campo';
 let mxRenderizadas = {};     // prefixo -> o que foi desenhado (pra PNG e Excel)
 
 function mxNorm(s) {
@@ -3023,13 +3044,13 @@ function mxDiaRot(k) {
 }
 
 // ── Recorte atual ─────────────────────────────────────────────────────────
-function mxFiltrar() {
+function mxFiltrar(modo) {
   const out = [];
   PG_REGIOES.forEach(reg => {
     const pac = PG_CACHE[reg.k];
     if (!pac) return;
     pac.dados.forEach(r => {
-      if (mxModo === 'campo' && !mxEmCampo(r)) return;
+      if (modo === 'campo' && !mxEmCampo(r)) return;
       if (mxProc && mxProcDe(r) !== mxProc) return;
       if (mxReg && getTipoOrdem(r) !== mxReg) return;
       out.push(r);
@@ -3056,7 +3077,7 @@ function mxColunas(rows) {
     dias[k] = (dias[k] || 0) + 1;
   });
   const fut = Object.keys(dias).sort();
-  const mostra = fut.slice(0, MX_MAX_DIAS);
+  const mostra = mxDias > 0 ? fut.slice(0, mxDias) : fut;
   const setFut = {};
   mostra.forEach(k => { setFut[k] = 1; });
 
@@ -3069,7 +3090,9 @@ function mxColunas(rows) {
     cols.push({ k, l1:rot.l1, l2: ehHoje ? 'hoje' : rot.l2, cor: ehHoje ? '#d35400' : '#2a3a50', destaque: ehHoje ? '#fff6ec' : '' });
   });
   if (fut.length > mostra.length) {
-    cols.push({ k:'__depois', l1:'Depois', l2:'+' + (fut.length - mostra.length) + ' dias', cor:'#6b7f99', destaque:'' });
+    // Clicar no cabecalho abre o resto dos dias em vez de deixar tudo num monte so.
+    cols.push({ k:'__depois', l1:'Depois &#9662;', l2:'+' + (fut.length - mostra.length) + ' dias &middot; abrir',
+      cor:'#6b7f99', destaque:'', acao:'mxSetDias(0)' });
   }
   if (sem) cols.push({ k:'__sem', l1:'Sem data', l2:'', cor:'#6b7f99', destaque:'' });
   return { cols, setFut, hojeK };
@@ -3114,19 +3137,20 @@ function mxFilhosOrdenados(no) {
     .sort((a, b) => (a.ordem - b.ordem) || (b.total - a.total) || a.rot.localeCompare(b.rot));
 }
 function mxEstaAberto(no) {
-  return mxAberto[no.chave] === undefined ? no.nivel === 0 : mxAberto[no.chave];
+  return mxAberto[no.chave] === undefined ? false : mxAberto[no.chave];
 }
 function mxToggle(idx) {
   const no = mxNodos[idx];
   if (!no) return;
   const atual = mxAberto[no.chave];
-  // nível 0 já abre por padrão, então o primeiro clique nele é pra FECHAR
-  mxAberto[no.chave] = atual === undefined ? no.nivel !== 0 : !atual;
+  mxAberto[no.chave] = atual === undefined ? true : !atual;
   mxRender();
 }
 
 function mxRegistrar(no) {
   no.__idx = mxNodos.length;
+  no.__ctx = mxCtxBuild;
+  no.__modo = mxModoBuild;
   mxNodos.push(no);
   return no;
 }
@@ -3175,12 +3199,14 @@ function mxCorpoHTML(no, cols, desenhadas) {
   return h;
 }
 
-function mxTabela(rows, ctx, titulo, sub, cabecalho, niveis, prefixo) {
+function mxTabela(modo, rows, ctx, titulo, sub, cabecalho, niveis, prefixo, eixo) {
+  mxCtxBuild = ctx;
+  mxModoBuild = modo;
   const raiz = mxAgrupar(rows, ctx, niveis, prefixo);
   const cols = ctx.cols;
   mxArvores[prefixo] = raiz;
   const desenhadas = [];
-  mxRenderizadas[prefixo] = { titulo, cabecalho, cols, nos: desenhadas };
+  mxRenderizadas[prefixo] = { titulo, cabecalho, cols, nos: desenhadas, modo, eixo };
   let h = '<div style="background:var(--white);border:0.5px solid var(--gray-200);border-radius:12px;overflow:hidden;margin-bottom:14px;">'
     + '<div style="padding:12px 16px;border-bottom:0.5px solid var(--gray-200);display:flex;align-items:flex-start;gap:12px;flex-wrap:wrap;">'
     + '<div style="flex:1;min-width:220px;">'
@@ -3197,7 +3223,8 @@ function mxTabela(rows, ctx, titulo, sub, cabecalho, niveis, prefixo) {
     + '<thead><tr style="background:#0d1b2a;color:#fff;">'
     + '<th style="padding:8px 12px;text-align:left;font-size:9px;text-transform:uppercase;letter-spacing:1px;position:sticky;left:0;background:#0d1b2a;z-index:1;">' + cabecalho + '</th>';
   cols.forEach(c => {
-    h += '<th style="padding:6px 10px;text-align:center;font-size:9px;text-transform:uppercase;letter-spacing:.5px;">' + c.l1
+    const cl = c.acao ? ' onclick="' + c.acao + '" title="Clique pra abrir todos os dias" style="cursor:pointer;' : ' style="';
+    h += '<th' + cl + 'padding:6px 10px;text-align:center;font-size:9px;text-transform:uppercase;letter-spacing:.5px;">' + c.l1
       + (c.l2 ? '<br><span style="font-size:8px;opacity:.65;font-weight:400;text-transform:none;">' + c.l2 + '</span>' : '') + '</th>';
   });
   h += '<th style="padding:6px 12px;text-align:center;font-size:9px;text-transform:uppercase;letter-spacing:1px;background:#e8a020;color:#0d1b2a;">Total</th>';
@@ -3220,7 +3247,8 @@ function mxCard(rot, valor, sub, cor, fundo, acao) {
 // `rows` e o que esta na tela; `todas` inclui as vencidas mesmo quando o
 // botao "Ocultar vencidas" esta ligado -- o card delas nunca some, so sai
 // das tabelas e dos totais.
-function mxKPIs(rows, ctx, todas) {
+function mxKPIs(modo, rows, ctx, todas) {
+  const kpi = (t, v, sub, cor, fundo, acao) => mxCard(t, v, sub, cor, fundo, "mxAbrirKPI('" + modo + "','" + acao + "')");
   let hj = 0, campo = 0;
   const porProc = { NC:0, IN:0, PE:0 };
   rows.forEach(r => {
@@ -3234,27 +3262,27 @@ function mxKPIs(rows, ctx, todas) {
   const tot = rows.length || 1;
   const pct = n => ((n / tot) * 100).toFixed(1) + '%';
   let h = '';
-  h += mxCard(mxModo === 'campo' ? '🚚 Em campo' : '📦 Carteira total', rows.length,
-    (mxModo === 'campo' ? 'com equipe · 3 regiões' : 'todos os estados · 3 regiões') + (mxOcultarVenc ? ' · sem as vencidas' : ''),
-    '#1565c0', '#eef3fb', "mxAbrirKPI('tot')");
-  h += mxCard('⚠ Vencidas', venc,
+  h += kpi(modo === 'campo' ? '🚚 Em campo' : '📦 Carteira total', rows.length,
+    (modo === 'campo' ? 'com equipe · 3 regiões' : 'todos os estados · 3 regiões') + (mxOcultarVenc ? ' · sem as vencidas' : ''),
+    '#1565c0', '#eef3fb', 'tot');
+  h += kpi('⚠ Vencidas', venc,
     mxOcultarVenc ? 'fora da tabela · clique pra ver' : ((venc / (todas.length || 1)) * 100).toFixed(1) + '% · clique pra ver',
-    '#c0392b', '#fdecea', "mxAbrirKPI('venc')");
-  h += mxCard('⏰ Vencem hoje', hj, pct(hj) + ' · clique pra ver', '#d35400', '#fff3e8', "mxAbrirKPI('hoje')");
-  if (mxModo === 'carteira') {
-    h += mxCard('🚚 Já em campo', campo, pct(campo) + ' do total', '#1a7a40', '#eaf7ef', "mxAbrirKPI('campo')");
-    h += mxCard('🗂 Sem equipe', rows.length - campo, 'programáveis / a reprogramar', '#6b7f99', '#f1f4f9', "mxAbrirKPI('semequipe')");
+    '#c0392b', '#fdecea', 'venc');
+  h += kpi('⏰ Vencem hoje', hj, pct(hj) + ' · clique pra ver', '#d35400', '#fff3e8', 'hoje');
+  if (modo === 'carteira') {
+    h += kpi('🚚 Já em campo', campo, pct(campo) + ' do total', '#1a7a40', '#eaf7ef', 'campo');
+    h += kpi('🗂 Sem equipe', rows.length - campo, 'programáveis / a reprogramar', '#6b7f99', '#f1f4f9', 'semequipe');
   }
   ['NC', 'IN', 'PE'].forEach(p => {
     if (mxProc && mxProc !== p) return;
-    h += mxCard(MX_PROC_ROT[p], porProc[p], pct(porProc[p]) + ' do recorte', MX_PROC_COR[p], '#f6f8fc', "mxAbrirKPI('proc:" + p + "')");
+    h += kpi(MX_PROC_ROT[p], porProc[p], pct(porProc[p]) + ' do recorte', MX_PROC_COR[p], '#f6f8fc', 'proc:' + p);
   });
   return h;
 }
 
 function mxAviso() {
   const incompletas = PG_REGIOES.filter(x => PG_CACHE[x.k] && !PG_CACHE[x.k].temCarteira);
-  if (mxModo !== 'carteira' || !incompletas.length) return '';
+  if (!incompletas.length) return '';
   const nomes = incompletas.map(x => x.rot).join(', ');
   return '<div style="background:#fff8e6;border:1px solid #f0d08a;border-radius:12px;padding:12px 14px;margin-bottom:14px;font-size:12px;color:#7a5a10;">'
     + '<b>⚠ Carteira incompleta em ' + nomes + '.</b> O relatório publicado dessa(s) região(ões) só traz o que já está com equipe — '
@@ -3273,30 +3301,51 @@ function mxCarimbo() {
   return partes.join(' · ');
 }
 
+// A tela inteira: "Enviado a campo" em cima, "Carteira" logo embaixo, com AS
+// MESMAS COLUNAS de vencimento nos dois. As colunas saem da base inteira (a
+// carteira ja contem o que esta em campo), e e isso que deixa comparar os dois
+// blocos batendo o olho na mesma coluna.
 function mxRender() {
-  const todas = mxFiltrar();
-  const rows = mxOcultarVenc ? mxSoDaquiPraFrente(todas) : todas;
-  const ctx = mxColunas(rows);
   mxNodos = [];
   mxArvores = {};
   mxRenderizadas = {};
+  const carteira = mxFiltrar('carteira');
+  const campo = carteira.filter(mxEmCampo);
+  const ctx = mxColunas(mxOcultarVenc ? mxSoDaquiPraFrente(carteira) : carteira);
   mxCtxAtual = ctx;
-  mxLinhasAtuais = rows;
-  mxTodasAtuais = todas;
-  document.getElementById('mx-kpis').innerHTML = mxKPIs(rows, ctx, todas);
-  document.getElementById('mx-aviso').innerHTML = mxAviso();
-  const recorte = mxOcultarVenc ? ' Mostrando só o que vence de hoje pra frente.' : '';
-  const subT = (mxModo === 'campo'
-    ? 'Só o que já está com equipe (Enviado ao Campo, Em execução, Designado).'
-    : 'A base inteira, com equipe ou não.') + recorte
-    + ' Clique num número pra ver as OS; clique na linha pra abrir o nível de baixo.';
-  let h = mxTabela(rows, ctx, 'Por região e unidade operativa', subT, 'Região · unidade · município',
-    [r => MX_REG_ROT[r.__reg] || r.__reg, r => r.__uni, r => r['Município'] || '—'], 'A');
-  h += mxTabela(rows, ctx, 'Por processo', 'Novas Conexões, Gestão Inadimplências e Gestão Perdas do jeito que o eOrder classifica.' + recorte + ' Clique na linha pra abrir por tipo de serviço.',
-    'Processo · tipo de serviço',
-    [r => MX_PROC_ROT[mxProcDe(r)] || 'Outros', r => mxSubDe(r)], 'B');
+  let h = mxBloco('campo', campo, ctx) + mxBloco('carteira', carteira, ctx) + mxHistBloco(ctx);
   document.getElementById('mx-tabelas').innerHTML = h;
   document.getElementById('mx-atualizado').textContent = mxCarimbo();
+}
+
+function mxBloco(modo, todas, ctx) {
+  const rows = mxOcultarVenc ? mxSoDaquiPraFrente(todas) : todas;
+  MX_BLOCOS[modo] = { rows, todas, ctx };
+  const emCampo = modo === 'campo';
+  const recorte = mxOcultarVenc ? ' Só o que vence de hoje pra frente.' : '';
+  const sub = (emCampo
+    ? 'O que já saiu pra equipe — Enviado ao Campo, Em execução e Designado.'
+    : 'A base inteira: com equipe e sem equipe (programáveis, a reprogramar).') + recorte;
+  let h = '<div style="border:1px solid ' + (emCampo ? '#cfe2f7' : '#e6dff5') + ';background:'
+    + (emCampo ? '#f6faff' : '#fbf9ff') + ';border-radius:16px;padding:14px;margin-bottom:18px;">'
+    + '<div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:10px;">'
+    + '<div style="font-size:16px;font-weight:800;color:' + (emCampo ? '#14487e' : '#573a9c') + ';">'
+    + (emCampo ? '🚚 Enviado a campo' : '📦 Carteira') + '</div>'
+    + '<div style="font-size:11px;color:var(--gray-400);">' + sub + '</div></div>'
+    + '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:12px;">'
+    + mxKPIs(modo, rows, ctx, todas) + '</div>';
+  if (!emCampo) h += mxAviso();
+  h += mxTabela(modo, rows, ctx, 'Por região e unidade operativa',
+    'Clique num número pra ver as OS; clique na linha pra abrir o nível de baixo.',
+    'Região · unidade · município',
+    [r => MX_REG_ROT[r.__reg] || r.__reg, r => r.__uni, r => r['Município'] || '—'],
+    emCampo ? 'A' : 'C', 'por-regiao');
+  h += mxTabela(modo, rows, ctx, 'Por processo',
+    'Novas Conexões, Gestão Inadimplências e Gestão Perdas do jeito que o eOrder classifica. Clique na linha pra abrir por tipo de serviço.',
+    'Processo · tipo de serviço',
+    [r => MX_PROC_ROT[mxProcDe(r)] || 'Outros', r => mxSubDe(r)],
+    emCampo ? 'B' : 'D', 'por-processo');
+  return h + '</div>';
 }
 
 // ── Detalhe ───────────────────────────────────────────────────────────────
@@ -3309,30 +3358,34 @@ function mxAbrirLista(linhas, titulo, sub) {
   document.getElementById('pg-modal').style.display = 'flex';
 }
 
-function mxRotColuna(colK) {
+function mxRotColuna(colK, ctx) {
   if (colK === '__tot') return 'total';
   if (colK === '__venc') return 'vencidas';
   if (colK === '__depois') return 'depois';
   if (colK === '__sem') return 'sem data';
   const r = mxDiaRot(colK);
-  return r.l1 + (colK === mxCtxAtual.hojeK ? ' (hoje)' : '');
+  return r.l1 + (ctx && colK === ctx.hojeK ? ' (hoje)' : '');
 }
 
 function mxAbrirCelula(idx, colK) {
   const no = mxNodos[idx];
-  if (!no || !mxCtxAtual) return;
-  const linhas = colK === '__tot' ? no.linhas : no.linhas.filter(r => mxColDe(r, mxCtxAtual) === colK);
+  if (!no || !no.__ctx) return;
+  const ctx = no.__ctx;
+  const linhas = colK === '__tot' ? no.linhas : no.linhas.filter(r => mxColDe(r, ctx) === colK);
   const caminho = no.chave.split('|').slice(1).filter(Boolean).join(' › ') || 'Todas as regiões';
-  mxAbrirLista(linhas, caminho + ' · ' + mxRotColuna(colK),
-    (mxModo === 'campo' ? 'em campo' : 'carteira') + ' · vencimento ' + mxRotColuna(colK));
+  const rot = mxRotColuna(colK, ctx);
+  mxAbrirLista(linhas, (no.__modo === 'campo' ? '🚚 Enviado a campo' : '📦 Carteira') + ' · ' + caminho + ' · ' + rot,
+    (no.__modo === 'campo' ? 'em campo' : 'carteira') + ' · vencimento ' + rot);
 }
 
-function mxAbrirKPI(tipo) {
-  const rows = mxLinhasAtuais, ctx = mxCtxAtual;
+function mxAbrirKPI(modo, tipo) {
+  const b = MX_BLOCOS[modo];
+  if (!b) return;
+  const rows = b.rows, ctx = b.ctx;
   if (!ctx) return;
-  let linhas = rows, rot = mxModo === 'campo' ? 'Em campo' : 'Carteira';
+  let linhas = rows, rot = modo === 'campo' ? 'Em campo' : 'Carteira';
   // as vencidas saem da lista completa: o card continua valendo com o filtro ligado
-  if (tipo === 'venc') { linhas = mxTodasAtuais.filter(r => { const k = mxDiaKey(r); return k && k < ctx.hojeK; }); rot = 'Vencidas'; }
+  if (tipo === 'venc') { linhas = b.todas.filter(r => { const k = mxDiaKey(r); return k && k < ctx.hojeK; }); rot = 'Vencidas'; }
   else if (tipo === 'hoje') { linhas = rows.filter(r => mxDiaKey(r) === ctx.hojeK); rot = 'Vencem hoje'; }
   else if (tipo === 'campo') { linhas = rows.filter(mxEmCampo); rot = 'Já em campo'; }
   else if (tipo === 'semequipe') { linhas = rows.filter(r => !mxEmCampo(r)); rot = 'Sem equipe'; }
@@ -3341,7 +3394,7 @@ function mxAbrirKPI(tipo) {
     linhas = rows.filter(r => mxProcDe(r) === p);
     rot = MX_PROC_ROT[p];
   }
-  mxAbrirLista(linhas, rot, '3 regiões · ' + (mxModo === 'campo' ? 'em campo' : 'carteira'));
+  mxAbrirLista(linhas, rot, '3 regiões · ' + (modo === 'campo' ? 'em campo' : 'carteira'));
 }
 
 // ── Ocultar vencidas ──────────────────────────────────────────────────────
@@ -3380,11 +3433,11 @@ function mxLinhasExport(prefixo) {
     const rot = (no.nivel < 0 ? '' : '    '.repeat(nivel)) + no.rot;
     return [rot].concat(t.cols.map(c => no.cont[c.k] || 0)).concat([no.total]);
   });
-  return { titulo: t.titulo, cab, linhas, cols: t.cols, cabecalho: t.cabecalho, nos: t.nos };
+  return { titulo: t.titulo, cab, linhas, cols: t.cols, cabecalho: t.cabecalho, nos: t.nos, modo: t.modo, eixo: t.eixo };
 }
 
-function mxContexto() {
-  const partes = [mxModo === 'campo' ? 'Enviado a campo' : 'Carteira'];
+function mxContexto(modo) {
+  const partes = [modo === 'campo' ? 'Enviado a campo' : 'Carteira'];
   if (mxProc) partes.push(MX_PROC_ROT[mxProc]);
   if (mxReg) partes.push(mxReg === 'REG' ? 'Reguladas' : 'Não reguladas');
   if (mxOcultarVenc) partes.push('sem as vencidas');
@@ -3394,7 +3447,7 @@ function mxContexto() {
 function mxCopiarTabela(prefixo) {
   const d = mxLinhasExport(prefixo);
   if (!d) return;
-  const texto = [d.titulo + ' — ' + mxContexto() + ' — ' + mxCarimbo()]
+  const texto = [d.titulo + ' — ' + mxContexto(d.modo) + ' — ' + mxCarimbo()]
     .concat([d.cab.join('\t')])
     .concat(d.linhas.map(l => l.join('\t')))
     .join('\n');
@@ -3425,8 +3478,9 @@ function mxCopiarFallback(texto, pronto) {
 function mxBaixarPNG(prefixo) {
   const cv = mxCanvasTabela(prefixo);
   if (!cv) return;
-  const nome = 'capa-rota_' + (mxModo === 'campo' ? 'em-campo' : 'carteira') + '_'
-    + (prefixo === 'A' ? 'por-regiao' : 'por-processo') + '_'
+  const t = mxRenderizadas[prefixo] || {};
+  const nome = 'capa-rota_' + (t.modo === 'campo' ? 'em-campo' : 'carteira') + '_'
+    + (t.eixo || 'tabela') + '_'
     + hoje.toLocaleDateString('pt-BR').replace(/\//g, '-') + '.png';
   cv.toBlob(b => {
     const url = URL.createObjectURL(b);
@@ -3470,7 +3524,7 @@ function mxCanvasTabela(prefixo) {
   c.fillStyle = '#fff'; c.font = '700 15px ' + fonte;
   c.fillText(d.titulo, 16, 24);
   c.fillStyle = '#8097b8'; c.font = '400 11px ' + fonte;
-  c.fillText(mxContexto(), 16, 44);
+  c.fillText(mxContexto(d.modo), 16, 44);
 
   // cabecalho da tabela
   let y = topo;
@@ -3524,6 +3578,244 @@ function mxCanvasTabela(prefixo) {
   return cv;
 }
 
+// ══════════════════════════════════════════════════════════════════════════
+//  FOTO DO DIA
+//  Todo dia, no PRIMEIRO envio de cada região, fica guardado um resumo de
+//  como o relatório chegou. É isso que depois deixa comparar: "ontem de manhã
+//  eu tinha 89 vencendo em 26/11 — e hoje?".
+//
+//  O resumo é pequeno de propósito: a base crua tem ~3 mil linhas por região,
+//  e guardar isso todo dia estouraria o espaço e o egress do Supabase. Cada
+//  linha do resumo é
+//      [unidade, processo, tipo de serviço, grupo, dia do vencimento, REG/NREG, qtd]
+//  com grupo 'C' = já com equipe (enviado a campo) e 'K' = o resto da carteira.
+//
+//  Fica na mesma tabela `snapshots`, com a chave hist|AAAA-MM-DD|Regiao — sem
+//  precisar de tabela nova. A foto do dia NÃO é sobrescrita pelo envio da
+//  tarde: só o botão "Salvar foto de hoje" substitui, e aí é de propósito.
+// ══════════════════════════════════════════════════════════════════════════
+
+function histChave(dia, regiao) { return 'hist|' + dia + '|' + regiao; }
+function histHoje() { return mxKeyDe(new Date()); }
+function histRot(dia) { const p = String(dia).split('-'); return p[2] + '/' + p[1]; }
+
+function histResumo(dados, regiao) {
+  const mapa = mxMapaMunicipios(dados, regiao);
+  const cont = {};
+  dados.forEach(r => {
+    const chave = [
+      mxUnidade(r, regiao, mapa),
+      mxProcDe(r) || '--',
+      mxSubDe(r),
+      mxEmCampo(r) ? 'C' : 'K',
+      mxDiaKey(r),
+      getTipoOrdem(r) || ''
+    ].join('\u0001');
+    cont[chave] = (cont[chave] || 0) + 1;
+  });
+  return Object.keys(cont).map(k => k.split('\u0001').concat([cont[k]]));
+}
+
+async function histExiste(dia, regiao) {
+  const res = await fetch(SB_URL + '/rest/v1/snapshots?regiao=eq.'
+    + encodeURIComponent(histChave(dia, regiao)) + '&select=regiao', {
+    headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY }
+  });
+  const rows = await res.json();
+  return rows.length > 0;
+}
+
+// forcar=false grava só se ainda não houver foto do dia — é assim que o que
+// fica guardado acaba sendo sempre o primeiro relatório da manhã.
+async function histGravar(regiao, dados, forcar) {
+  const dia = histHoje();
+  try {
+    if (!forcar && await histExiste(dia, regiao)) return 'ja';
+    const res = await sbFetch('POST', {
+      regiao: histChave(dia, regiao),
+      dados: { v: 1, dia, reg: regiao, total: dados.length, linhas: histResumo(dados, regiao) },
+      atualizado_em: new Date().toISOString()
+    });
+    return res.ok ? 'ok' : 'erro';
+  } catch (e) {
+    return 'erro';
+  }
+}
+
+async function histSalvarAgora() {
+  const dia = histHoje();
+  const prontas = PG_REGIOES.filter(x => PG_CACHE[x.k]);
+  if (!prontas.length) { showToast('Espere o painel carregar antes de salvar', 3000); return; }
+  let jaTem = false;
+  for (let i = 0; i < prontas.length; i++) {
+    if (await histExiste(dia, prontas[i].k)) { jaTem = true; break; }
+  }
+  if (jaTem && !confirm('Já existe uma foto guardada de hoje (' + histRot(dia) + ').\n\n'
+      + 'Substituir pela situação de agora?')) return;
+  showToast('⏳ Guardando a foto de hoje…');
+  let ok = 0;
+  for (let i = 0; i < prontas.length; i++) {
+    if (await histGravar(prontas[i].k, PG_CACHE[prontas[i].k].dados, true) === 'ok') ok++;
+  }
+  showToast(ok === prontas.length
+    ? '📸 Foto de ' + histRot(dia) + ' guardada — ' + ok + ' regiões'
+    : 'Guardei ' + ok + ' de ' + prontas.length + ' regiões', 3500);
+  await mxHistCarregarLista();
+}
+
+// ── Leitura ───────────────────────────────────────────────────────────────
+let mxHistLista = null;     // dias guardados, mais novo primeiro
+let mxHistDia = '';         // dia escolhido pra comparar
+let mxHistModo = 'campo';   // qual bloco a comparação está olhando
+const MX_HIST_CACHE = {};   // dia -> linhas vindas do Supabase
+
+async function mxHistCarregarLista() {
+  try {
+    const res = await fetch(SB_URL + '/rest/v1/snapshots?regiao=like.hist%7C*&select=regiao', {
+      headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY }
+    });
+    const rows = await res.json();
+    const dias = {};
+    (rows || []).forEach(r => { const p = String(r.regiao).split('|'); if (p[1]) dias[p[1]] = 1; });
+    mxHistLista = Object.keys(dias).sort().reverse();
+  } catch (e) {
+    mxHistLista = [];
+  }
+  mxHistPreencherSelect();
+}
+
+function mxHistPreencherSelect() {
+  const sel = document.getElementById('mx-hist-sel');
+  if (!sel) return;
+  const hj = histHoje();
+  let h = '<option value="">— sem comparação —</option>';
+  (mxHistLista || []).forEach(d => {
+    h += '<option value="' + d + '"' + (d === mxHistDia ? ' selected' : '') + '>'
+      + histRot(d) + (d === hj ? ' (foto de hoje)' : '') + '</option>';
+  });
+  sel.innerHTML = h;
+}
+
+async function mxHistEscolher(dia) {
+  mxHistDia = dia;
+  if (dia && !MX_HIST_CACHE[dia]) {
+    showToast('⏳ Buscando a foto de ' + histRot(dia) + '…');
+    try {
+      const res = await fetch(SB_URL + '/rest/v1/snapshots?regiao=like.'
+        + encodeURIComponent('hist|' + dia + '|') + '*&select=regiao,dados', {
+        headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY }
+      });
+      MX_HIST_CACHE[dia] = await res.json();
+    } catch (e) {
+      MX_HIST_CACHE[dia] = [];
+      showToast('Não consegui buscar: ' + e.message, 4000);
+    }
+  }
+  mxRender();
+}
+
+function mxHistSetModo(m) { mxHistModo = m; mxRender(); }
+
+// Soma a foto guardada respeitando os filtros que estão na tela, e joga cada
+// ordem na MESMA coluna que ela ocuparia hoje — a comparação é por data de
+// vencimento absoluta, não por "faltam N dias".
+function mxHistContagem(dia, modo, ctx) {
+  const pacs = MX_HIST_CACHE[dia] || [];
+  const out = {};
+  pacs.forEach(p => {
+    const d = p.dados || {};
+    const reg = d.reg || String(p.regiao).split('|')[2];
+    const alvo = out[reg] || (out[reg] = {});
+    (d.linhas || []).forEach(l => {
+      const proc = l[1], grupo = l[3], diaV = l[4], tipoReg = l[5], n = +l[6] || 0;
+      if (modo === 'campo' && grupo !== 'C') return;
+      if (mxProc && proc !== mxProc) return;
+      if (mxReg && tipoReg !== mxReg) return;
+      let col;
+      if (!diaV) col = '__sem';
+      else if (diaV < ctx.hojeK) col = '__venc';
+      else col = ctx.setFut[diaV] ? diaV : '__depois';
+      if (mxOcultarVenc && col === '__venc') return;
+      alvo[col] = (alvo[col] || 0) + n;
+      alvo.__tot = (alvo.__tot || 0) + n;
+    });
+  });
+  return out;
+}
+
+function mxContagemAtual(modo, ctx) {
+  const b = MX_BLOCOS[modo];
+  const out = {};
+  if (!b) return out;
+  b.rows.forEach(r => {
+    const alvo = out[r.__reg] || (out[r.__reg] = {});
+    const col = mxColDe(r, ctx);
+    alvo[col] = (alvo[col] || 0) + 1;
+    alvo.__tot = (alvo.__tot || 0) + 1;
+  });
+  return out;
+}
+
+function mxHistCelula(agora, antes, destaque) {
+  const d = agora - antes;
+  const cor = d === 0 ? '#8097b8' : (d < 0 ? '#1a7a40' : '#c0392b');
+  const sinal = d === 0 ? '=' : (d > 0 ? '+' + d : String(d));
+  return '<td title="' + histRot(mxHistDia) + ': ' + antes + ' → hoje: ' + agora + '"'
+    + ' style="padding:5px 10px;text-align:center;' + (destaque ? 'background:' + destaque + ';' : '') + '">'
+    + '<div style="font-weight:700;color:' + (agora ? '#1a2535' : '#d4dbe6') + ';font-size:12px;">' + (agora || '·') + '</div>'
+    + '<div style="font-size:10px;font-weight:700;color:' + cor + ';">' + sinal + '</div></td>';
+}
+
+function mxHistBloco(ctx) {
+  if (!mxHistDia) return '';
+  const antes = mxHistContagem(mxHistDia, mxHistModo, ctx);
+  const agora = mxContagemAtual(mxHistModo, ctx);
+  const pill = (m, rot) => '<button class="pg-tipo-btn' + (mxHistModo === m ? ' active' : '')
+    + '" onclick="mxHistSetModo(\'' + m + '\')">' + rot + '</button>';
+  let h = '<div style="border:1px solid #f0d8a8;background:#fffcf5;border-radius:16px;padding:14px;margin-bottom:18px;">'
+    + '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px;">'
+    + '<div style="font-size:16px;font-weight:800;color:#8a6410;">⏳ Comparado com ' + histRot(mxHistDia) + '</div>'
+    + pill('campo', '🚚 Enviado a campo') + pill('carteira', '📦 Carteira')
+    + '</div>'
+    + '<div style="font-size:11px;color:var(--gray-400);margin-bottom:10px;">'
+    + 'Número grande = como está agora. Embaixo, quanto mudou desde a foto de ' + histRot(mxHistDia)
+    + ' — <b style="color:#1a7a40;">verde para menos</b>, <b style="color:#c0392b;">vermelho para mais</b>. '
+    + 'A comparação é por data de vencimento: a coluna 26/11 de hoje fala das mesmas ordens que a coluna 26/11 daquele dia.</div>'
+    + '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:12px;white-space:nowrap;">'
+    + '<thead><tr style="background:#0d1b2a;color:#fff;">'
+    + '<th style="padding:8px 12px;text-align:left;font-size:9px;text-transform:uppercase;letter-spacing:1px;">Região</th>';
+  ctx.cols.forEach(c => {
+    h += '<th style="padding:6px 10px;text-align:center;font-size:9px;text-transform:uppercase;letter-spacing:.5px;">' + c.l1
+      + (c.l2 ? '<br><span style="font-size:8px;opacity:.65;font-weight:400;text-transform:none;">' + c.l2 + '</span>' : '') + '</th>';
+  });
+  h += '<th style="padding:6px 12px;text-align:center;font-size:9px;text-transform:uppercase;letter-spacing:1px;background:#e8a020;color:#0d1b2a;">Total</th>'
+    + '</tr></thead><tbody>';
+  const soma = { agora: {}, antes: {} };
+  PG_REGIOES.forEach(reg => {
+    const a = agora[reg.k] || {}, b = antes[reg.k] || {};
+    h += '<tr style="border-bottom:0.5px solid #f0e6d2;background:#fff;">'
+      + '<td style="padding:5px 12px;font-weight:700;color:#0d1b2a;">' + MX_REG_ROT[reg.k] + '</td>';
+    ctx.cols.forEach(c => {
+      soma.agora[c.k] = (soma.agora[c.k] || 0) + (a[c.k] || 0);
+      soma.antes[c.k] = (soma.antes[c.k] || 0) + (b[c.k] || 0);
+      h += mxHistCelula(a[c.k] || 0, b[c.k] || 0, c.destaque);
+    });
+    soma.agora.__tot = (soma.agora.__tot || 0) + (a.__tot || 0);
+    soma.antes.__tot = (soma.antes.__tot || 0) + (b.__tot || 0);
+    h += mxHistCelula(a.__tot || 0, b.__tot || 0, '#fdf6e8');
+    h += '</tr>';
+  });
+  h += '<tr style="background:#f7f1e4;border-top:1px solid #e8d9b8;">'
+    + '<td style="padding:5px 12px;font-weight:800;color:#0d1b2a;">Total geral</td>';
+  ctx.cols.forEach(c => { h += mxHistCelula(soma.agora[c.k] || 0, soma.antes[c.k] || 0, c.destaque); });
+  h += mxHistCelula(soma.agora.__tot || 0, soma.antes.__tot || 0, '#fdf6e8');
+  h += '</tr></tbody></table></div>';
+  if (!(MX_HIST_CACHE[mxHistDia] || []).length) {
+    h += '<div style="font-size:11px;color:#c0392b;margin-top:8px;">Não achei nenhuma foto guardada desse dia.</div>';
+  }
+  return h + '</div>';
+}
+
 // ── Filtros ───────────────────────────────────────────────────────────────
 function mxMarcar(prefixo, ativo, valores) {
   valores.forEach(v => {
@@ -3541,6 +3833,11 @@ function mxSetReg(t) {
   mxMarcar('mx-reg-', t, ['', 'REG', 'NREG']);
   mxRender();
 }
+function mxSetDias(n) {
+  mxDias = n;
+  mxMarcar('mx-dias-', String(n), ['7', '14', '30', '0']);
+  mxRender();
+}
 
 // ── Carregamento ──────────────────────────────────────────────────────────
 async function mxCarregar(forcar) {
@@ -3553,7 +3850,8 @@ async function mxCarregar(forcar) {
   try {
     await Promise.all(faltam.map(x => pgFetchRegiao(x.k, forcar)));
     mxRender();
-    showToast('✔ ' + mxLinhasAtuais.length + ' registros no recorte', 2000);
+    showToast('✔ ' + (MX_BLOCOS.carteira ? MX_BLOCOS.carteira.rows.length : 0) + ' registros no recorte', 2000);
+    mxHistCarregarLista();
   } catch (e) {
     document.getElementById('mx-tabelas').innerHTML =
       '<div style="text-align:center;padding:50px;color:#c0392b;font-size:13px;">Erro ao carregar: ' + mxEsc(e.message) + '</div>';
@@ -3566,24 +3864,19 @@ async function mxCarregar(forcar) {
 function mxRecarregar() { mxCarregar(true); }
 
 // ── Sub-abas ──────────────────────────────────────────────────────────────
-let pgView = 'campo';
+let pgView = 'dia';
 
 function pgSetView(v) {
+  if (v === 'campo' || v === 'carteira') v = 'dia';
   pgView = v;
-  const matriz = v === 'campo' || v === 'carteira';
+  const matriz = v === 'dia';
   document.getElementById('pg-view-equipes').style.display = matriz ? 'none' : 'block';
   document.getElementById('pg-view-matriz').style.display = matriz ? 'block' : 'none';
-  ['campo', 'carteira', 'equipes'].forEach(x => {
+  ['dia', 'equipes'].forEach(x => {
     const b = document.getElementById('pg-sub-' + x);
     if (b) b.classList.toggle('active', x === v);
   });
-  if (matriz) {
-    mxModo = v;
-    mxAberto = {};
-    mxCarregar();
-  } else {
-    pgCarregar();
-  }
+  if (matriz) mxCarregar(); else pgCarregar();
 }
 
 function pgAbrirPainel() {
