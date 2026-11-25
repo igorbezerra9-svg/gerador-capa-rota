@@ -362,6 +362,14 @@
   }
   .pg-tipo-btn.active { background:var(--navy);color:var(--accent);border-color:var(--navy); }
 
+  .pg-sub-btn {
+    padding:8px 18px;border:none;border-bottom:3px solid transparent;border-radius:0;
+    background:transparent;color:var(--gray-400);font-size:13px;font-weight:700;cursor:pointer;
+    transition:all .15s;
+  }
+  .pg-sub-btn:hover { color:var(--text); }
+  .pg-sub-btn.active { color:var(--navy);border-bottom-color:var(--accent); }
+
   .pg-multisel { position:relative; display:inline-block; }
   .pg-multisel-btn {
     padding:5px 12px;border:1.5px solid var(--gray-200);border-radius:20px;
@@ -646,7 +654,16 @@
 </div>
 
 <!-- ══ PAINEL GERENCIAL ══ -->
-<div id="painel-section" style="display:none;max-width:960px;margin:0 auto;padding:24px;">
+<div id="painel-section" style="display:none;max-width:1240px;margin:0 auto;padding:24px;">
+
+  <!-- sub-abas do painel -->
+  <div style="display:flex;gap:4px;border-bottom:1px solid var(--gray-200);margin-bottom:18px;flex-wrap:wrap;">
+    <button class="pg-sub-btn active" id="pg-sub-campo" onclick="pgSetView('campo')">&#128197; Enviado a campo por dia</button>
+    <button class="pg-sub-btn" id="pg-sub-carteira" onclick="pgSetView('carteira')">&#128230; Carteira</button>
+    <button class="pg-sub-btn" id="pg-sub-equipes" onclick="pgSetView('equipes')">&#128119; Equipes</button>
+  </div>
+
+  <div id="pg-view-equipes" style="display:none;max-width:960px;margin:0 auto;">
 
   <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;align-items:center;">
     <span style="font-size:11px;color:var(--gray-400);font-weight:700;text-transform:uppercase;letter-spacing:1px;">Região:</span>
@@ -734,6 +751,32 @@
     </div>
 
     <div style="font-size:11px;color:var(--gray-400);text-align:right;margin-top:8px;" id="pg-atualizado"></div>
+  </div>
+
+  </div><!-- /pg-view-equipes -->
+
+  <!-- VISAO POR DIA DE VENCIMENTO (Enviado a campo / Carteira) -->
+  <div id="pg-view-matriz">
+    <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center;">
+      <span style="font-size:11px;color:var(--gray-400);font-weight:700;text-transform:uppercase;letter-spacing:1px;">Processo:</span>
+      <button class="pg-tipo-btn active" id="mx-proc-all" onclick="mxSetProc('')">Todos</button>
+      <button class="pg-tipo-btn" id="mx-proc-NC" onclick="mxSetProc('NC')">Novas Conexões</button>
+      <button class="pg-tipo-btn" id="mx-proc-IN" onclick="mxSetProc('IN')">Gestão Inadimplências</button>
+      <button class="pg-tipo-btn" id="mx-proc-PE" onclick="mxSetProc('PE')">Gestão Perdas</button>
+      <span style="width:12px;"></span>
+      <span style="font-size:11px;color:var(--gray-400);font-weight:700;text-transform:uppercase;letter-spacing:1px;">Tipo:</span>
+      <button class="pg-tipo-btn active" id="mx-reg-all" onclick="mxSetReg('')">Todas</button>
+      <button class="pg-tipo-btn" id="mx-reg-REG" onclick="mxSetReg('REG')" style="background:#e8f4fd;color:#1565c0;border-color:#90caf9;">Reguladas</button>
+      <button class="pg-tipo-btn" id="mx-reg-NREG" onclick="mxSetReg('NREG')" style="background:#fff3e8;color:#bf360c;border-color:#ffb74d;">Não reguladas</button>
+      <div style="margin-left:auto;display:flex;gap:10px;align-items:center;">
+        <span id="mx-atualizado" style="font-size:10px;color:var(--gray-400);"></span>
+        <button class="pg-tipo-btn" onclick="mxRecarregar()" title="Rebaixa os três relatórios da nuvem">&#8635; Atualizar</button>
+      </div>
+    </div>
+
+    <div id="mx-kpis" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:14px;"></div>
+    <div id="mx-aviso"></div>
+    <div id="mx-tabelas"></div>
   </div>
 </div>
 
@@ -1091,19 +1134,42 @@ function tipoHTML(tipoFull) {
 }
 
 // ══ MAPA DE TIPOS ══
+// Mesma lista do painel-eorder-cosampa (mais completa que a antiga daqui).
 const TIPO_REGULADA = {
   'OUTMML':true,'OUTMGD':true,'OUTVPC':true,'OUTIRD':true,'OUTTCP':true,
-  'OUTNCU':true,'OUTAMC':true,'OUTSEM':true,'OUTIRM':true,'NOVLBT':true,
+  'OUTNCU':true,'OUTAMC':true,'OUTSEM':true,'OUTIRM':true,'NOVLBT':true,'NOVLNA':true,
   'OUTAQM':true,'OUTSDJ':true,'OUTSRL':true,'OUTTME':true,'OUTNCR':true,
   'OUTDCM':true,'OUTACT':true,'OUTIMB':true,'OUTRAR':true,'OUTRNR':true,
-  'OUTRNU':true,'OUTRIM':true,'OUTRAU':true,'OUTCP0':true,'OUTRNL':true,
+  'OUTRNU':true,'OUTRUR':true,'OUTRIM':true,'OUTRAU':true,'OUTCP0':true,'OUTRNL':true,
   'OUTVMT':true,'NOVPRO':true,'OUTOTC':true,'OUTIMR':true,'OUTSTB':true,
-  'OUTIRC':true,'OUTMLD':true,'OUTMMI':true,'OUTRCI':true,'OUTRVI':true,'OUTRCO':true
+  'OUTIRC':true,'OUTMLD':true,'OUTMMI':true,'OUTRCI':true,'OUTRVI':true,
+  'OUTRCO':true,'OUTACB':true,'NOVCAP':true,'OUTCMI':true,'OUTDIR':true,
+  'OUTDGD':true,'OUTDBR':true,'OUTITE':true,'NOVVIR':true,'NOVVIU':true,
+  'OUTSEE':true,'OUTSMA':true,'OUTSML':true,'OUTSMI':true,'OUTVIE':true,
+  'OUTACM':true
 };
 const TIPO_NAO_REGULADA = {
   'OUTCDN':true,'OUTRNN':true,'OUTERM':true,'OUTRFS':true,'OUTCSC':true,
-  'OUTCRT':true
+  'OUTCRT':true,'OUTIRR':true
 };
+
+// Familia de cada codigo, do jeito que o proprio eOrder classifica
+// (Processo + Tipo TdC). Serve de reserva: quando o relatorio traz as colunas
+// Processo e Tipo TdC -- que e o caso hoje -- sao elas que mandam.
+//   Novas Conexoes -> NC_LN Ligacao Nova / NC_VER Verificacao / NC_ALT Alteracao
+//   Gestao Inadimplencias -> CORTE / RELIG        Gestao Perdas -> PERDAS
+const TIPO_FAMILIA = {
+  'NOVLBT':'NC_LN','NOVPRO':'NC_LN','NOVLNA':'NC_LN','OUTRIM':'NC_LN',
+  'OUTMGD':'NC_VER','OUTAMC':'NC_VER','OUTVPC':'NC_VER','OUTSEM':'NC_VER','OUTSDJ':'NC_VER','OUTACT':'NC_VER','OUTSRL':'NC_VER',
+  'OUTSEE':'NC_VER','OUTVIE':'NC_VER','OUTVMT':'NC_VER','NOVVIU':'NC_VER','NOVVIR':'NC_VER',
+  'OUTMML':'NC_ALT','OUTSML':'NC_ALT','OUTIMB':'NC_ALT','OUTIMR':'NC_ALT','OUTDCM':'NC_ALT','OUTMLD':'NC_ALT','OUTAQM':'NC_ALT','OUTDBR':'NC_ALT',
+  'OUTCDN':'CORTE','OUTRNN':'CORTE','OUTERM':'CORTE','OUTCP0':'CORTE','OUTCSC':'CORTE','OUTCRT':'CORTE','OUTRFS':'CORTE','OUTIRR':'CORTE',
+  'OUTNCU':'RELIG','OUTNCR':'RELIG','OUTRNR':'RELIG','OUTRAR':'RELIG','OUTRNU':'RELIG','OUTRAU':'RELIG','OUTRUR':'RELIG',
+  'OUTTME':'PERDAS','OUTIRM':'PERDAS','OUTIRD':'PERDAS','OUTTCP':'PERDAS','OUTOTC':'PERDAS','OUTIRC':'PERDAS'
+};
+function familiaDoCodigo(cod) {
+  return TIPO_FAMILIA[cod] || '';
+}
 
 function getTipoOrdem(r) {
   const t = (r['Tipo Remessa WIN'] || r[' Tipo de Serviço'] || r['Tipo de Serviço'] || '').trim().toUpperCase();
@@ -2030,7 +2096,7 @@ function setTab(tab) {
   document.getElementById('tab-gerador').style.borderBottomColor = isGer ? '#e8a020' : 'transparent';
   document.getElementById('tab-painel').style.color = isGer ? '#8097b8' : '#e8a020';
   document.getElementById('tab-painel').style.borderBottomColor = isGer ? 'transparent' : '#e8a020';
-  if (!isGer) pgCarregar();
+  if (!isGer) pgAbrirPainel();
 }
 
 // ══ PAINEL GERENCIAL ══
@@ -2179,14 +2245,13 @@ function pgSetTipo(t) {
   pgRender();
 }
 
-async function pgCarregar() {
+// Usa o cache por regiao (pgFetchRegiao): trocar de aba nao rebaixa de novo o
+// mesmo pacote. So o botao Atualizar e o banner de nova publicacao forcam.
+async function pgCarregar(forcar) {
   showToast('⏳ Carregando painel...');
   try {
-    const res = await fetch(SB_URL + '/rest/v1/snapshots?regiao=eq.' + pgRegiao + '&select=dados,atualizado_em', {
-      headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY }
-    });
-    const rows = await res.json();
-    if (!rows.length || !rows[0].dados) {
+    const pac = await pgFetchRegiao(pgRegiao, forcar);
+    if (!pac.dados.length) {
       document.getElementById('pg-sem-dados').style.display = 'block';
       document.getElementById('pg-content').style.display = 'none';
       showToast('Sem dados para ' + pgRegiao, 3000);
@@ -2194,8 +2259,8 @@ async function pgCarregar() {
     }
     document.getElementById('pg-sem-dados').style.display = 'none';
     document.getElementById('pg-content').style.display = 'block';
-    pgDados = rows[0].dados;
-    const dt = new Date(rows[0].atualizado_em);
+    pgDados = pac.dados;
+    const dt = new Date(pac.atualizado);
     pgAtualizado = 'Dados da nuvem · ' + pgRegiao + ' · ' + dt.toLocaleDateString('pt-BR') + ' ' + dt.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
     pgRender();
     showToast('✔ Painel carregado — ' + pgDados.length + ' registros', 2000);
@@ -2756,9 +2821,11 @@ function iniciarRealtime() {
 function recarregarRegiao() {
   fecharBanner();
   if (regiaoComAtualizacao) {
+    delete PG_CACHE[regiaoComAtualizacao];
     carregarNuvem(regiaoComAtualizacao);
-    // Se painel estiver aberto na mesma região, atualiza também
-    if (pgDados.length && pgRegiao === regiaoComAtualizacao) pgCarregar();
+    // Se o painel estiver aberto, atualiza também
+    if (pgView !== 'equipes') mxCarregar(true);
+    else if (pgDados.length && pgRegiao === regiaoComAtualizacao) pgCarregar(true);
   }
 }
 
@@ -2781,6 +2848,527 @@ function resetApp() {
   document.getElementById('result-section').style.display = 'none';
   document.getElementById('file-input').value = '';
   allData = []; capasGeradas = {};
+}
+
+
+// ══════════════════════════════════════════════════════════════════════════
+//  SUB-ABAS DO PAINEL GERENCIAL — "Em campo por dia" e "Carteira"
+//
+//  Mesma tabela nas duas: linha = região → unidade operativa → município,
+//  coluna = dia de VENCIMENTO (Data Prevista Finalização Trabalhos).
+//  A diferença é só o recorte:
+//    campo    → só o que já está com equipe (Enviado ao Campo / Em execução / Designado)
+//    carteira → a base inteira, inclusive programáveis e a reprogramar
+//
+//  Classificação por Processo/Tipo TdC vem das próprias colunas do eOrder
+//  (conferido contra o mapa de códigos do painel-eorder-cosampa: bate 100%).
+// ══════════════════════════════════════════════════════════════════════════
+
+const PG_REGIOES = [
+  { k:'Sul',       rot:'Sul',        icone:'🌍', cor:'#2a78d6' },
+  { k:'CentroSul', rot:'Centro Sul', icone:'🌎', cor:'#8e44ad' },
+  { k:'Leste',     rot:'Leste',      icone:'🌏', cor:'#1baf7a' }
+];
+const MX_REG_ROT = { Sul:'🌍 Sul', CentroSul:'🌎 Centro Sul', Leste:'🌏 Leste' };
+
+// "Em campo" = já saiu pra equipe. 'A Reprogramar' NÃO entra: voltou pra mesa.
+const MX_ESTADOS_CAMPO = ['enviado ao campo', 'em execucao', 'designado'];
+
+const MX_MAX_DIAS = 7;   // colunas de dia; o que passar disso vira "Depois"
+
+const MX_PROC_ROT = { NC:'Novas Conexões', IN:'Gestão Inadimplências', PE:'Gestão Perdas' };
+const MX_PROC_COR = { NC:'#1565c0', IN:'#c0392b', PE:'#8e44ad' };
+// Ordem fixa de algumas linhas; o resto ordena por volume
+const MX_ORDEM = {
+  '🌍 Sul':0, '🌎 Centro Sul':1, '🌏 Leste':2,
+  'Novas Conexões':0, 'Gestão Inadimplências':1, 'Gestão Perdas':2,
+  'Ligação Nova':0, 'Verificação Comercial':1, 'Alteração de Ligação':2,
+  'Corte':0, 'Religação':1, 'Normalizações':0, '[Medidas Técnicas]':1
+};
+
+let mxModo = 'campo';      // 'campo' | 'carteira'
+let mxProc = '';           // '' | NC | IN | PE
+let mxReg  = '';           // '' | REG | NREG
+let mxAberto = {};         // chave da linha -> true/false (expandida)
+let mxCarregando = false;
+let mxNodos = [];          // nós da tabela, pra abrir o detalhe ao clicar
+let mxCtxAtual = null;
+let mxLinhasAtuais = [];
+
+function mxNorm(s) {
+  return String(s == null ? '' : s).normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().trim();
+}
+function mxEsc(s) {
+  return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ── Cache por região ──────────────────────────────────────────────────────
+// Sem isso o painel rebaixa o mesmo pacote toda vez que se troca de aba —
+// e é esse tráfego repetido que estoura a cota de egress do Supabase.
+const PG_CACHE = {};
+
+async function pgFetchRegiao(regiao, forcar) {
+  if (!forcar && PG_CACHE[regiao]) return PG_CACHE[regiao];
+  const res = await fetch(SB_URL + '/rest/v1/snapshots?regiao=eq.' + regiao + '&select=dados,atualizado_em', {
+    headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY }
+  });
+  const rows = await res.json();
+  const pac = {
+    regiao,
+    dados: (rows[0] && rows[0].dados) || [],
+    atualizado: rows[0] ? rows[0].atualizado_em : null
+  };
+  pac.muniUnidade = mxMapaMunicipios(pac.dados, regiao);
+  // Carteira completa? Se a região só publica o que está em campo, a aba
+  // Carteira fica capenga pra ela e isso precisa aparecer na tela.
+  pac.temCarteira = pac.dados.some(r => !mxEmCampo(r));
+  pac.dados.forEach(r => {
+    r.__reg = regiao;
+    r.__uni = mxUnidade(r, regiao, pac.muniUnidade);
+  });
+  PG_CACHE[regiao] = pac;
+  return pac;
+}
+
+function mxEmCampo(r) {
+  return MX_ESTADOS_CAMPO.indexOf(mxNorm(r['Estado TdC']).toLowerCase()) >= 0;
+}
+
+// ── Unidade operativa ─────────────────────────────────────────────────────
+// Metade da carteira ainda não tem equipe (programáveis), então o prefixo do
+// Código Equipe não resolve sozinho. Monta-se o mapa município → unidade a
+// partir das ordens que JÁ têm equipe e usa-se ele pro resto.
+function mxMapaMunicipios(dados, regiao) {
+  const centros = CS_POR_REGIAO[regiao] || [];
+  const votos = {};
+  dados.forEach(r => {
+    const cod = String(r['Código Equipe'] || '').trim().toUpperCase();
+    if (!cod) return;
+    const c = centros.find(c => c.siglas.some(s => cod.indexOf(s) === 0));
+    if (!c) return;
+    const m = mxNorm(r['Município']);
+    if (!m) return;
+    if (!votos[m]) votos[m] = {};
+    votos[m][c.nome] = (votos[m][c.nome] || 0) + 1;
+  });
+  const mapa = {};
+  Object.keys(votos).forEach(m => {
+    mapa[m] = Object.keys(votos[m]).sort((a, b) => votos[m][b] - votos[m][a])[0];
+  });
+  return mapa;
+}
+
+function mxUnidade(r, regiao, mapa) {
+  const centros = CS_POR_REGIAO[regiao] || [];
+  const cod = String(r['Código Equipe'] || '').trim().toUpperCase();
+  if (cod) {
+    const c = centros.find(c => c.siglas.some(s => cod.indexOf(s) === 0));
+    if (c) return c.nome;
+  }
+  const m = mxNorm(r['Município']);
+  if (mapa && mapa[m]) return mapa[m];
+  const c2 = centros.find(c => m && m.indexOf(mxNorm(c.nomeCompleto)) >= 0);
+  return c2 ? c2.nome : 'Outros';
+}
+
+// ── Processo / tipo de serviço ────────────────────────────────────────────
+// A própria base traz Processo e Tipo TdC. O mapa de códigos só entra se
+// essas colunas vierem vazias (base antiga).
+function mxCodigo(r) {
+  const t = (r['Tipo Remessa WIN'] || r[' Tipo de Serviço'] || r['Tipo de Serviço'] || '').trim().toUpperCase();
+  return t.split(' - ')[0].trim().split(' ')[0];
+}
+function mxProcDe(r) {
+  const p = mxNorm(r['Processo']);
+  if (p.indexOf('NOVAS') === 0) return 'NC';
+  if (p.indexOf('INADIMPL') >= 0) return 'IN';
+  if (p.indexOf('PERDAS') >= 0) return 'PE';
+  const f = familiaDoCodigo(mxCodigo(r));
+  if (f.indexOf('NC_') === 0) return 'NC';
+  if (f === 'CORTE' || f === 'RELIG') return 'IN';
+  if (f === 'PERDAS') return 'PE';
+  return '';
+}
+const MX_FAM_ROT = {
+  NC_LN:'Ligação Nova', NC_VER:'Verificação Comercial', NC_ALT:'Alteração de Ligação',
+  NC_OUT:'Novas Conexões (outros)', CORTE:'Corte', RELIG:'Religação', PERDAS:'Normalizações'
+};
+function mxSubDe(r) {
+  const t = String(r['Tipo TdC'] || '').trim();
+  if (t) return t;
+  return MX_FAM_ROT[familiaDoCodigo(mxCodigo(r))] || '—';
+}
+
+// ── Dias ──────────────────────────────────────────────────────────────────
+function mxKeyDe(dt) {
+  return dt.getFullYear() + '-' + String(dt.getMonth() + 1).padStart(2, '0') + '-' + String(dt.getDate()).padStart(2, '0');
+}
+function mxDiaKey(r) {
+  if (r.__dia === undefined) {
+    const dt = parseDateTimeStr(r['Data Prevista Finalização Trabalhos']);
+    r.__dia = dt ? mxKeyDe(dt) : '';
+  }
+  return r.__dia;
+}
+const MX_DIA_SEM = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
+function mxDiaRot(k) {
+  const p = k.split('-');
+  const dt = new Date(+p[0], +p[1] - 1, +p[2]);
+  return { l1: p[2] + '/' + p[1], l2: MX_DIA_SEM[dt.getDay()] };
+}
+
+// ── Recorte atual ─────────────────────────────────────────────────────────
+function mxFiltrar() {
+  const out = [];
+  PG_REGIOES.forEach(reg => {
+    const pac = PG_CACHE[reg.k];
+    if (!pac) return;
+    pac.dados.forEach(r => {
+      if (mxModo === 'campo' && !mxEmCampo(r)) return;
+      if (mxProc && mxProcDe(r) !== mxProc) return;
+      if (mxReg && getTipoOrdem(r) !== mxReg) return;
+      out.push(r);
+    });
+  });
+  return out;
+}
+
+function mxColunas(rows) {
+  const hojeK = mxKeyDe(hoje);
+  const dias = {};
+  let sem = 0;
+  rows.forEach(r => {
+    const k = mxDiaKey(r);
+    if (!k) { sem++; return; }
+    if (k < hojeK) return;
+    dias[k] = (dias[k] || 0) + 1;
+  });
+  const fut = Object.keys(dias).sort();
+  const mostra = fut.slice(0, MX_MAX_DIAS);
+  const setFut = {};
+  mostra.forEach(k => { setFut[k] = 1; });
+
+  const cols = [{ k:'__venc', l1:'Vencidas', l2:'atrasadas', cor:'#c0392b', destaque:'#fdecea' }];
+  mostra.forEach(k => {
+    const rot = mxDiaRot(k);
+    const ehHoje = k === hojeK;
+    cols.push({ k, l1:rot.l1, l2: ehHoje ? 'hoje' : rot.l2, cor: ehHoje ? '#d35400' : '#2a3a50', destaque: ehHoje ? '#fff6ec' : '' });
+  });
+  if (fut.length > mostra.length) {
+    cols.push({ k:'__depois', l1:'Depois', l2:'+' + (fut.length - mostra.length) + ' dias', cor:'#6b7f99', destaque:'' });
+  }
+  if (sem) cols.push({ k:'__sem', l1:'Sem data', l2:'', cor:'#6b7f99', destaque:'' });
+  return { cols, setFut, hojeK };
+}
+
+function mxColDe(r, ctx) {
+  const k = mxDiaKey(r);
+  if (!k) return '__sem';
+  if (k < ctx.hojeK) return '__venc';
+  if (ctx.setFut[k]) return k;
+  return '__depois';
+}
+
+// ── Agrupamento em árvore ─────────────────────────────────────────────────
+function mxAgrupar(rows, ctx, niveis, prefixo) {
+  const raiz = { rot:'Total geral', chave: prefixo + '|', nivel:-1, filhos:{}, cont:{}, total:0, linhas:rows };
+  rows.forEach(r => {
+    const col = mxColDe(r, ctx);
+    raiz.cont[col] = (raiz.cont[col] || 0) + 1;
+    raiz.total++;
+    let no = raiz, caminho = prefixo;
+    for (let i = 0; i < niveis.length; i++) {
+      const lab = niveis[i](r) || '—';
+      caminho = caminho + '|' + lab;
+      if (!no.filhos[lab]) {
+        no.filhos[lab] = {
+          rot: lab, chave: caminho, nivel: i, filhos: {}, cont: {}, total: 0,
+          linhas: [], ordem: MX_ORDEM[lab] === undefined ? 99 : MX_ORDEM[lab]
+        };
+      }
+      no = no.filhos[lab];
+      no.cont[col] = (no.cont[col] || 0) + 1;
+      no.total++;
+      no.linhas.push(r);
+    }
+  });
+  return raiz;
+}
+
+function mxFilhosOrdenados(no) {
+  return Object.keys(no.filhos).map(k => no.filhos[k])
+    .sort((a, b) => (a.ordem - b.ordem) || (b.total - a.total) || a.rot.localeCompare(b.rot));
+}
+function mxEstaAberto(no) {
+  return mxAberto[no.chave] === undefined ? no.nivel === 0 : mxAberto[no.chave];
+}
+function mxToggle(idx) {
+  const no = mxNodos[idx];
+  if (!no) return;
+  const atual = mxAberto[no.chave];
+  // nível 0 já abre por padrão, então o primeiro clique nele é pra FECHAR
+  mxAberto[no.chave] = atual === undefined ? no.nivel !== 0 : !atual;
+  mxRender();
+}
+
+function mxRegistrar(no) {
+  no.__idx = mxNodos.length;
+  mxNodos.push(no);
+  return no;
+}
+
+// ── Render ────────────────────────────────────────────────────────────────
+function mxCelula(no, col) {
+  const n = no.cont[col.k] || 0;
+  const idx = no.__idx;
+  if (!n) return '<td style="padding:6px 10px;text-align:center;color:#d4dbe6;' + (col.destaque ? 'background:' + col.destaque + ';' : '') + '">·</td>';
+  return '<td onclick="mxAbrirCelula(' + idx + ',\'' + col.k + '\')" title="Clique pra ver as OS"'
+    + ' style="padding:6px 10px;text-align:center;font-weight:700;color:' + col.cor + ';cursor:pointer;'
+    + (col.destaque ? 'background:' + col.destaque + ';' : '') + '">' + n + '</td>';
+}
+
+function mxLinhaHTML(no, cols, temFilhos, aberto) {
+  const idx = no.__idx;
+  const ind = Math.max(no.nivel, 0) * 16;
+  const peso = no.nivel <= 0 ? 700 : no.nivel === 1 ? 600 : 400;
+  const tam = no.nivel < 0 ? 12 : no.nivel === 0 ? 12.5 : no.nivel === 1 ? 12 : 11;
+  const cor = no.nivel < 0 ? '#0d1b2a' : no.nivel === 0 ? '#0d1b2a' : no.nivel === 1 ? '#2a3a50' : '#6b7f99';
+  const fundo = no.nivel < 0 ? '#f2f6fc' : no.nivel === 0 ? '#fafcff' : '#fff';
+  const seta = temFilhos
+    ? '<span style="display:inline-block;width:12px;color:#8097b8;">' + (aberto ? '▾' : '▸') + '</span>'
+    : '<span style="display:inline-block;width:12px;"></span>';
+  const onclick = temFilhos ? ' onclick="mxToggle(' + idx + ')"' : '';
+  let h = '<tr style="border-bottom:0.5px solid #eef2f8;background:' + fundo + ';">'
+    + '<td' + onclick + ' style="padding:6px 12px 6px ' + (12 + ind) + 'px;font-size:' + tam + 'px;font-weight:' + peso
+    + ';color:' + cor + ';position:sticky;left:0;background:' + fundo + ';' + (temFilhos ? 'cursor:pointer;' : '') + '">'
+    + seta + ' ' + mxEsc(no.rot) + '</td>';
+  cols.forEach(c => { h += mxCelula(no, c); });
+  const totCor = no.nivel < 0 ? '#0d1b2a' : '#1a2535';
+  h += '<td onclick="mxAbrirCelula(' + idx + ',\'__tot\')" title="Clique pra ver as OS" style="padding:6px 12px;text-align:center;font-weight:800;color:' + totCor + ';background:#fdf6e8;cursor:pointer;">' + no.total + '</td>';
+  return h + '</tr>';
+}
+
+function mxCorpoHTML(no, cols) {
+  let h = '';
+  mxFilhosOrdenados(no).forEach(f => {
+    const temFilhos = Object.keys(f.filhos).length > 0;
+    const aberto = temFilhos && mxEstaAberto(f);
+    mxRegistrar(f);
+    h += mxLinhaHTML(f, cols, temFilhos, aberto);
+    if (aberto) h += mxCorpoHTML(f, cols);
+  });
+  return h;
+}
+
+function mxTabela(rows, ctx, titulo, sub, cabecalho, niveis, prefixo) {
+  const raiz = mxAgrupar(rows, ctx, niveis, prefixo);
+  const cols = ctx.cols;
+  let h = '<div style="background:var(--white);border:0.5px solid var(--gray-200);border-radius:12px;overflow:hidden;margin-bottom:14px;">'
+    + '<div style="padding:12px 16px;border-bottom:0.5px solid var(--gray-200);">'
+    + '<div style="font-size:11px;font-weight:700;color:var(--gray-400);text-transform:uppercase;letter-spacing:.8px;">' + titulo + '</div>'
+    + (sub ? '<div style="font-size:11px;color:var(--gray-400);margin-top:3px;font-weight:400;text-transform:none;letter-spacing:0;">' + sub + '</div>' : '')
+    + '</div><div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:12px;white-space:nowrap;">'
+    + '<thead><tr style="background:#0d1b2a;color:#fff;">'
+    + '<th style="padding:8px 12px;text-align:left;font-size:9px;text-transform:uppercase;letter-spacing:1px;position:sticky;left:0;background:#0d1b2a;z-index:1;">' + cabecalho + '</th>';
+  cols.forEach(c => {
+    h += '<th style="padding:6px 10px;text-align:center;font-size:9px;text-transform:uppercase;letter-spacing:.5px;">' + c.l1
+      + (c.l2 ? '<br><span style="font-size:8px;opacity:.65;font-weight:400;text-transform:none;">' + c.l2 + '</span>' : '') + '</th>';
+  });
+  h += '<th style="padding:6px 12px;text-align:center;font-size:9px;text-transform:uppercase;letter-spacing:1px;background:#e8a020;color:#0d1b2a;">Total</th>';
+  h += '</tr></thead><tbody>';
+  h += mxCorpoHTML(raiz, cols);
+  mxRegistrar(raiz);
+  h += mxLinhaHTML(raiz, cols, false, false);
+  return h + '</tbody></table></div></div>';
+}
+
+function mxCard(rot, valor, sub, cor, fundo, acao) {
+  const clique = acao ? ' onclick="' + acao + '" onmouseover="this.style.opacity=\'.8\'" onmouseout="this.style.opacity=\'1\'" style="cursor:pointer;' : ' style="';
+  return '<div' + clique + 'background:' + fundo + ';border-radius:12px;padding:12px 14px;transition:opacity .15s;">'
+    + '<div style="font-size:10px;color:' + cor + ';text-transform:uppercase;letter-spacing:.8px;font-weight:700;margin-bottom:6px;">' + rot + '</div>'
+    + '<div style="font-size:26px;font-weight:700;color:' + cor + ';line-height:1;">' + valor + '</div>'
+    + '<div style="font-size:11px;color:' + cor + ';opacity:.65;margin-top:4px;">' + sub + '</div></div>';
+}
+
+function mxKPIs(rows, ctx) {
+  let venc = 0, hj = 0, campo = 0;
+  const porProc = { NC:0, IN:0, PE:0 };
+  rows.forEach(r => {
+    const k = mxDiaKey(r);
+    if (k && k < ctx.hojeK) venc++;
+    else if (k === ctx.hojeK) hj++;
+    if (mxEmCampo(r)) campo++;
+    const p = mxProcDe(r);
+    if (porProc[p] !== undefined) porProc[p]++;
+  });
+  const tot = rows.length || 1;
+  const pct = n => ((n / tot) * 100).toFixed(1) + '%';
+  let h = '';
+  h += mxCard(mxModo === 'campo' ? '🚚 Em campo' : '📦 Carteira total', rows.length,
+    mxModo === 'campo' ? 'com equipe · 3 regiões' : 'todos os estados · 3 regiões',
+    '#1565c0', '#eef3fb', "mxAbrirKPI('tot')");
+  h += mxCard('⚠ Vencidas', venc, pct(venc) + ' · clique pra ver', '#c0392b', '#fdecea', "mxAbrirKPI('venc')");
+  h += mxCard('⏰ Vencem hoje', hj, pct(hj) + ' · clique pra ver', '#d35400', '#fff3e8', "mxAbrirKPI('hoje')");
+  if (mxModo === 'carteira') {
+    h += mxCard('🚚 Já em campo', campo, pct(campo) + ' do total', '#1a7a40', '#eaf7ef', "mxAbrirKPI('campo')");
+    h += mxCard('🗂 Sem equipe', rows.length - campo, 'programáveis / a reprogramar', '#6b7f99', '#f1f4f9', "mxAbrirKPI('semequipe')");
+  }
+  ['NC', 'IN', 'PE'].forEach(p => {
+    if (mxProc && mxProc !== p) return;
+    h += mxCard(MX_PROC_ROT[p], porProc[p], pct(porProc[p]) + ' do recorte', MX_PROC_COR[p], '#f6f8fc', "mxAbrirKPI('proc:" + p + "')");
+  });
+  return h;
+}
+
+function mxAviso() {
+  const incompletas = PG_REGIOES.filter(x => PG_CACHE[x.k] && !PG_CACHE[x.k].temCarteira);
+  if (mxModo !== 'carteira' || !incompletas.length) return '';
+  const nomes = incompletas.map(x => x.rot).join(', ');
+  return '<div style="background:#fff8e6;border:1px solid #f0d08a;border-radius:12px;padding:12px 14px;margin-bottom:14px;font-size:12px;color:#7a5a10;">'
+    + '<b>⚠ Carteira incompleta em ' + nomes + '.</b> O relatório publicado dessa(s) região(ões) só traz o que já está com equipe — '
+    + 'não vem nenhuma ordem em <i>programáveis</i> ou <i>a reprogramar</i>. Pra enxergar a carteira inteira, a operadora precisa subir o '
+    + 'relatório do TdC sem filtro de estado.</div>';
+}
+
+function mxCarimbo() {
+  const partes = PG_REGIOES.map(x => {
+    const pac = PG_CACHE[x.k];
+    if (!pac || !pac.atualizado) return x.rot + ': —';
+    const dt = new Date(pac.atualizado);
+    return x.rot + ' ' + dt.toLocaleDateString('pt-BR', { day:'2-digit', month:'2-digit' }) + ' '
+      + dt.toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit' });
+  });
+  return partes.join(' · ');
+}
+
+function mxRender() {
+  const rows = mxFiltrar();
+  const ctx = mxColunas(rows);
+  mxNodos = [];
+  mxCtxAtual = ctx;
+  mxLinhasAtuais = rows;
+  document.getElementById('mx-kpis').innerHTML = mxKPIs(rows, ctx);
+  document.getElementById('mx-aviso').innerHTML = mxAviso();
+  const subT = mxModo === 'campo'
+    ? 'Só o que já está com equipe (Enviado ao Campo, Em execução, Designado). Clique num número pra ver as OS; clique na linha pra abrir por município.'
+    : 'A base inteira, com equipe ou não. Clique num número pra ver as OS; clique na linha pra abrir por município.';
+  let h = mxTabela(rows, ctx, 'Por região e unidade operativa', subT, 'Região · unidade · município',
+    [r => MX_REG_ROT[r.__reg] || r.__reg, r => r.__uni, r => r['Município'] || '—'], 'A');
+  h += mxTabela(rows, ctx, 'Por processo', 'Novas Conexões, Gestão Inadimplências e Gestão Perdas do jeito que o eOrder classifica. Clique na linha pra abrir por tipo de serviço.',
+    'Processo · tipo de serviço',
+    [r => MX_PROC_ROT[mxProcDe(r)] || 'Outros', r => mxSubDe(r)], 'B');
+  document.getElementById('mx-tabelas').innerHTML = h;
+  document.getElementById('mx-atualizado').textContent = mxCarimbo();
+}
+
+// ── Detalhe ───────────────────────────────────────────────────────────────
+function mxAbrirLista(linhas, titulo, sub) {
+  pgModalDados = linhas;
+  document.getElementById('pg-modal-title').textContent = titulo;
+  document.getElementById('pg-modal-sub').textContent = linhas.length + ' ordens de serviço · ' + sub;
+  document.getElementById('pg-modal-search').value = '';
+  pgFiltrarModal();
+  document.getElementById('pg-modal').style.display = 'flex';
+}
+
+function mxRotColuna(colK) {
+  if (colK === '__tot') return 'total';
+  if (colK === '__venc') return 'vencidas';
+  if (colK === '__depois') return 'depois';
+  if (colK === '__sem') return 'sem data';
+  const r = mxDiaRot(colK);
+  return r.l1 + (colK === mxCtxAtual.hojeK ? ' (hoje)' : '');
+}
+
+function mxAbrirCelula(idx, colK) {
+  const no = mxNodos[idx];
+  if (!no || !mxCtxAtual) return;
+  const linhas = colK === '__tot' ? no.linhas : no.linhas.filter(r => mxColDe(r, mxCtxAtual) === colK);
+  const caminho = no.chave.split('|').slice(1).filter(Boolean).join(' › ') || 'Todas as regiões';
+  mxAbrirLista(linhas, caminho + ' · ' + mxRotColuna(colK),
+    (mxModo === 'campo' ? 'em campo' : 'carteira') + ' · vencimento ' + mxRotColuna(colK));
+}
+
+function mxAbrirKPI(tipo) {
+  const rows = mxLinhasAtuais, ctx = mxCtxAtual;
+  if (!ctx) return;
+  let linhas = rows, rot = mxModo === 'campo' ? 'Em campo' : 'Carteira';
+  if (tipo === 'venc') { linhas = rows.filter(r => { const k = mxDiaKey(r); return k && k < ctx.hojeK; }); rot = 'Vencidas'; }
+  else if (tipo === 'hoje') { linhas = rows.filter(r => mxDiaKey(r) === ctx.hojeK); rot = 'Vencem hoje'; }
+  else if (tipo === 'campo') { linhas = rows.filter(mxEmCampo); rot = 'Já em campo'; }
+  else if (tipo === 'semequipe') { linhas = rows.filter(r => !mxEmCampo(r)); rot = 'Sem equipe'; }
+  else if (tipo.indexOf('proc:') === 0) {
+    const p = tipo.split(':')[1];
+    linhas = rows.filter(r => mxProcDe(r) === p);
+    rot = MX_PROC_ROT[p];
+  }
+  mxAbrirLista(linhas, rot, '3 regiões · ' + (mxModo === 'campo' ? 'em campo' : 'carteira'));
+}
+
+// ── Filtros ───────────────────────────────────────────────────────────────
+function mxMarcar(prefixo, ativo, valores) {
+  valores.forEach(v => {
+    const b = document.getElementById(prefixo + (v || 'all'));
+    if (b) b.classList.toggle('active', v === ativo);
+  });
+}
+function mxSetProc(p) {
+  mxProc = p;
+  mxMarcar('mx-proc-', p, ['', 'NC', 'IN', 'PE']);
+  mxRender();
+}
+function mxSetReg(t) {
+  mxReg = t;
+  mxMarcar('mx-reg-', t, ['', 'REG', 'NREG']);
+  mxRender();
+}
+
+// ── Carregamento ──────────────────────────────────────────────────────────
+async function mxCarregar(forcar) {
+  if (mxCarregando) return;
+  const faltam = PG_REGIOES.filter(x => forcar || !PG_CACHE[x.k]);
+  if (!faltam.length) { mxRender(); return; }
+  mxCarregando = true;
+  document.getElementById('mx-tabelas').innerHTML =
+    '<div style="text-align:center;padding:50px;color:var(--gray-400);font-size:13px;">⏳ Carregando ' + faltam.length + ' região(ões)…</div>';
+  try {
+    await Promise.all(faltam.map(x => pgFetchRegiao(x.k, forcar)));
+    mxRender();
+    showToast('✔ ' + mxLinhasAtuais.length + ' registros no recorte', 2000);
+  } catch (e) {
+    document.getElementById('mx-tabelas').innerHTML =
+      '<div style="text-align:center;padding:50px;color:#c0392b;font-size:13px;">Erro ao carregar: ' + mxEsc(e.message) + '</div>';
+    showToast('Erro: ' + e.message, 4000);
+  } finally {
+    mxCarregando = false;
+  }
+}
+
+function mxRecarregar() { mxCarregar(true); }
+
+// ── Sub-abas ──────────────────────────────────────────────────────────────
+let pgView = 'campo';
+
+function pgSetView(v) {
+  pgView = v;
+  const matriz = v === 'campo' || v === 'carteira';
+  document.getElementById('pg-view-equipes').style.display = matriz ? 'none' : 'block';
+  document.getElementById('pg-view-matriz').style.display = matriz ? 'block' : 'none';
+  ['campo', 'carteira', 'equipes'].forEach(x => {
+    const b = document.getElementById('pg-sub-' + x);
+    if (b) b.classList.toggle('active', x === v);
+  });
+  if (matriz) {
+    mxModo = v;
+    mxAberto = {};
+    mxCarregar();
+  } else {
+    pgCarregar();
+  }
+}
+
+function pgAbrirPainel() {
+  pgSetView(pgView);
 }
 
 // ══ TOAST ══
