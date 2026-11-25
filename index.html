@@ -3821,7 +3821,14 @@ function mxHistBloco(ctx) {
   h += '<th style="padding:6px 12px;text-align:center;font-size:9px;text-transform:uppercase;letter-spacing:1px;background:#e8a020;color:#0d1b2a;">Total</th>'
     + '</tr></thead><tbody>';
   const soma = { agora: {}, antes: {} };
-  PG_REGIOES.forEach(reg => {
+  // So entram na tabela as regioes que TEM foto daquele dia. Sem isso, uma
+  // regiao que nao publicou aparece como "+tudo" e estraga o total.
+  const comFoto = {};
+  (MX_HIST_CACHE[mxHistDia] || []).forEach(p => {
+    const r = (p.dados && p.dados.reg) || String(p.regiao).split('|')[2];
+    if (r) comFoto[r] = true;
+  });
+  PG_REGIOES.filter(x => comFoto[x.k]).forEach(reg => {
     const a = agora[reg.k] || {}, b = antes[reg.k] || {};
     h += '<tr style="border-bottom:0.5px solid #f0e6d2;background:#fff;">'
       + '<td style="padding:5px 12px;font-weight:700;color:#0d1b2a;">' + MX_REG_ROT[reg.k] + '</td>';
@@ -3840,8 +3847,14 @@ function mxHistBloco(ctx) {
   ctx.cols.forEach(c => { h += mxHistCelula(soma.agora[c.k] || 0, soma.antes[c.k] || 0, c.destaque); });
   h += mxHistCelula(soma.agora.__tot || 0, soma.antes.__tot || 0, '#fdf6e8');
   h += '</tr></tbody></table></div>';
-  if (!(MX_HIST_CACHE[mxHistDia] || []).length) {
+  const semFoto = PG_REGIOES.filter(x => !comFoto[x.k]);
+  if (semFoto.length === PG_REGIOES.length) {
     h += '<div style="font-size:11px;color:#c0392b;margin-top:8px;">Não achei nenhuma foto guardada desse dia.</div>';
+  } else if (semFoto.length) {
+    h += '<div style="font-size:11px;color:#8a6410;margin-top:8px;">'
+      + '<b>Fora da comparação:</b> ' + semFoto.map(x => x.rot).join(', ')
+      + ' — não tem foto de ' + histRot(mxHistDia) + '. São regiões que não publicaram naquele dia; '
+      + 'entram sozinhas assim que a operadora subir o relatório.</div>';
   }
   return h + '</div>';
 }
