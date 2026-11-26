@@ -3930,15 +3930,25 @@ function mxHistCabecalho(ctx) {
 function mxHistTabelaFoto(ctx, dia) {
   const regs = (mxHistRegioes[dia] || []);
   if (!regs.length) return '';
-  const foto = mxHistContagem(dia, mxHistModo, ctx);
+  return '<div style="margin-top:8px;border:1px solid #d8e2ef;border-radius:12px;padding:10px;background:#fbfdff;">'
+    + '<div style="font-size:11px;font-weight:800;color:#44607f;margin-bottom:8px;">'
+    + '📷 A foto de ' + histRot(dia) + ' como ela está guardada</div>'
+    + mxHistFotoRecorte(ctx, dia, regs, 'campo')
+    + mxHistFotoRecorte(ctx, dia, regs, 'carteira')
+    + '</div>';
+}
+
+// Um recorte da foto. Os dois saem empilhados com as mesmas colunas, que e o
+// que deixa comparar enviado a campo com carteira sem tirar o olho da coluna.
+function mxHistFotoRecorte(ctx, dia, regs, modo) {
+  const emCampo = modo === 'campo';
+  const foto = mxHistContagem(dia, modo, ctx);
   const cel = (n, destaque) => '<td style="padding:5px 10px;text-align:center;'
     + (destaque ? 'background:' + destaque + ';' : '') + 'font-weight:700;font-size:12px;color:'
     + (n ? '#1a2535' : '#d4dbe6') + ';">' + (n || '·') + '</td>';
-  let h = '<div style="margin-top:8px;border:1px solid #d8e2ef;border-radius:12px;padding:10px;background:#fbfdff;">'
-    + '<div style="font-size:11px;font-weight:800;color:#44607f;margin-bottom:7px;">'
-    + '📷 A foto de ' + histRot(dia) + ' como ela está guardada — '
-    + (mxHistModo === 'campo' ? 'enviado a campo' : 'carteira')
-    + ' <span style="font-weight:400;opacity:.75;">(use os botões aí em cima pra trocar)</span></div>'
+  let h = '<div style="font-size:12px;font-weight:800;color:' + (emCampo ? '#14487e' : '#573a9c')
+    + ';margin:' + (emCampo ? '0' : '12px') + ' 2px 5px;">'
+    + (emCampo ? '🚚 Enviado a campo' : '📦 Carteira') + '</div>'
     + mxHistCabecalho(ctx);
   const soma = {};
   PG_REGIOES.filter(x => regs.indexOf(x.k) >= 0).forEach(reg => {
@@ -3952,7 +3962,7 @@ function mxHistTabelaFoto(ctx, dia) {
   h += '<tr style="background:#eef3f9;border-top:1px solid #d8e2ef;">'
     + '<td style="padding:5px 12px;font-weight:800;color:#0d1b2a;">Total geral</td>';
   ctx.cols.forEach(c => { h += cel(soma[c.k] || 0, c.destaque); });
-  return h + cel(soma.__tot || 0, '#fdf6e8') + '</tr></tbody></table></div></div>';
+  return h + cel(soma.__tot || 0, '#fdf6e8') + '</tr></tbody></table></div>';
 }
 
 function mxHistBotaoFoto(dia) {
