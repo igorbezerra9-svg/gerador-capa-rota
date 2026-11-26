@@ -2952,17 +2952,56 @@ function mxEsc(s) {
 // e é esse tráfego repetido que estoura a cota de egress do Supabase.
 const PG_CACHE = {};
 
-async function pgFetchRegiao(regiao, forcar) {
-  if (!forcar && PG_CACHE[regiao]) return PG_CACHE[regiao];
-  const res = await fetch(SB_URL + '/rest/v1/snapshots?regiao=eq.' + regiao + '&select=dados,atualizado_em', {
+// De onde o painel le: 'foto' = a foto que o Igor salvou hoje, 'relatorio' =
+// o que esta publicado agora. A foto e o padrao, porque e o momento que ele
+// escolheu; o relatorio da tarde mudava os numeros debaixo do pe dele.
+let mxFonte = 'foto';
+let mxFotoDoDia = null;    // dia da foto carregada, quando ha uma
+let mxFotoFalhou = '';     // por que caiu no relatorio: '' | 'nenhuma' | 'antiga'
+
+function histChaveBruta(regiao) { return 'hist_raw|' + regiao; }
+
+// Hora do relatorio publicado de cada regiao. Sao tres linhas sem o `dados`,
+// entao da pra buscar sempre, mesmo com o painel aberto na foto.
+const MX_TS = {};
+async function mxCarregarTimestamps() {
+  try {
+    const res = await fetch(SB_URL + '/rest/v1/snapshots?regiao=in.('
+      + PG_REGIOES.map(x => x.k).join(',') + ')&select=regiao,atualizado_em', {
+      headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY }
+    });
+    (await res.json()).forEach(r => { MX_TS[r.regiao] = r.atualizado_em; });
+  } catch (e) { /* sem isso a barra so nao mostra a hora do relatorio */ }
+}
+
+// As linhas cruas da foto. Chave sem data de proposito: cada salvamento
+// sobrescreve a anterior, entao so o ultimo dia guardado fica com o detalhe
+// que permite clicar num numero e ver as OS. Os dias velhos ficam com as
+// contagens, que e o que cabe no banco.
+async function pgBuscarBruta(regiao) {
+  const res = await fetch(SB_URL + '/rest/v1/snapshots?regiao=eq.'
+    + encodeURIComponent(histChaveBruta(regiao)) + '&select=dados', {
     headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY }
   });
   const rows = await res.json();
-  const pac = {
-    regiao,
-    dados: (rows[0] && rows[0].dados) || [],
-    atualizado: rows[0] ? rows[0].atualizado_em : null
-  };
+  return (rows[0] && rows[0].dados) || null;
+}
+
+async function pgFetchRegiao(regiao, forcar) {
+  if (!forcar && PG_CACHE[regiao] && PG_CACHE[regiao].fonte === mxFonte) return PG_CACHE[regiao];
+  let dados = [], atualizado = null, dia = null;
+  if (mxFonte === 'foto') {
+    const f = await pgBuscarBruta(regiao);
+    if (f) { dados = f.bruto || []; atualizado = f.fonte || null; dia = f.dia || null; }
+  } else {
+    const res = await fetch(SB_URL + '/rest/v1/snapshots?regiao=eq.' + regiao + '&select=dados,atualizado_em', {
+      headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY }
+    });
+    const rows = await res.json();
+    dados = (rows[0] && rows[0].dados) || [];
+    atualizado = rows[0] ? rows[0].atualizado_em : null;
+  }
+  const pac = { regiao, dados, atualizado, dia, fonte: mxFonte };
   pac.muniUnidade = mxMapaMunicipios(pac.dados, regiao);
   // Carteira completa? Se a região só publica o que está em campo, a aba
   // Carteira fica capenga pra ela e isso precisa aparecer na tela.
@@ -3345,7 +3384,8 @@ function mxCarimbo() {
     return x.rot + ' ' + dt.toLocaleDateString('pt-BR', { day:'2-digit', month:'2-digit' }) + ' '
       + dt.toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit' });
   });
-  return 'Relatório publicado: ' + partes.join(' · ');
+  return (mxFonte === 'foto' ? 'Foto de ' + histRot(mxFotoDoDia) + ': ' : 'Relatório publicado: ')
+    + partes.join(' · ');
 }
 
 // A tela inteira: "Enviado a campo" em cima, "Carteira" logo embaixo, com AS
@@ -3368,7 +3408,8 @@ function mxRender() {
   mxGuardarBloco('carteira', carteira, ctx);
   // A comparação vem primeiro: de manhã a pergunta é "ontem rendeu?", e a
   // resposta nao pode estar no fim da pagina.
-  const h = mxHistBloco(ctx)
+  const h = mxFonteBarra()
+    + mxHistBloco(ctx)
     + mxResumoTopo(ctx)
     + mxGrupo(ctx, 'Por região e unidade operativa',
         'Clique num número pra ver as OS; clique na linha pra abrir o nível de baixo.',
@@ -3758,31 +3799,76 @@ async function histGravar(regiao, dados, forcar, fonte) {
         linhas: histResumo(dados, regiao) },
       atualizado_em: new Date().toISOString()
     });
-    return res.ok ? 'ok' : 'erro';
+    if (!res.ok) return 'erro';
+    // As linhas cruas vao junto, pra que a tela possa abrir na foto sem perder
+    // o clique que lista as OS. Se isso falhar a foto continua valendo: o
+    // painel cai no relatorio e avisa.
+    try {
+      await sbFetch('POST', {
+        regiao: histChaveBruta(regiao),
+        dados: { v: 1, dia, reg: regiao, fonte: src, bruto: dados },
+        atualizado_em: new Date().toISOString()
+      });
+    } catch (e) { /* a contagem ja esta salva; o detalhe e bonus */ }
+    return 'ok';
   } catch (e) {
     return 'erro';
   }
 }
 
+// Salvar e sempre sobre o relatorio publicado, nunca sobre o que esta na tela:
+// com o painel aberto na foto, salvar o que esta na tela so regravaria ela
+// mesma.
+async function histDadosAoVivo() {
+  if (mxFonte === 'relatorio') {
+    return PG_REGIOES.filter(x => PG_CACHE[x.k] && PG_CACHE[x.k].dados.length)
+      .map(x => ({ k: x.k, dados: PG_CACHE[x.k].dados, fonte: PG_CACHE[x.k].atualizado }));
+  }
+  const out = [];
+  for (let i = 0; i < PG_REGIOES.length; i++) {
+    const x = PG_REGIOES[i];
+    const res = await fetch(SB_URL + '/rest/v1/snapshots?regiao=eq.' + x.k + '&select=dados,atualizado_em', {
+      headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY }
+    });
+    const rows = await res.json();
+    if (rows[0] && (rows[0].dados || []).length) {
+      out.push({ k: x.k, dados: rows[0].dados, fonte: rows[0].atualizado_em });
+    }
+  }
+  return out;
+}
+
 async function histSalvarAgora() {
   const dia = histHoje();
-  const prontas = PG_REGIOES.filter(x => PG_CACHE[x.k]);
-  if (!prontas.length) { showToast('Espere o painel carregar antes de salvar', 3000); return; }
-  let jaTem = false;
+  showToast('⏳ Lendo o relatório publicado…');
+  const prontas = await histDadosAoVivo();
+  if (!prontas.length) { showToast('Não achei relatório publicado pra guardar', 3500); return; }
+  // Substituir apaga a foto da manha. O aviso diz de que hora e cada uma, pra
+  // ninguem trocar a das 8 pela das 18 sem perceber.
+  const troca = [];
   for (let i = 0; i < prontas.length; i++) {
-    if (await histExiste(dia, prontas[i].k)) { jaTem = true; break; }
+    const ja = await histGuardada(dia, prontas[i].k);
+    if (!ja) continue;
+    const reg = PG_REGIOES.filter(x => x.k === prontas[i].k)[0];
+    troca.push('  ' + (reg ? reg.rot : prontas[i].k) + ': guardada às '
+      + (histHora(ja.quando) || '--') + '  ->  passaria a ser a das '
+      + (histHora(prontas[i].fonte) || '--'));
   }
-  if (jaTem && !confirm('Já existe uma foto guardada de hoje (' + histRot(dia) + ').\n\n'
-      + 'Substituir pela situação de agora?')) return;
-  showToast('⏳ Guardando a foto de hoje…');
+  if (troca.length && !confirm('Já existe uma foto de hoje (' + histRot(dia) + ').'
+      + String.fromCharCode(10, 10) + troca.join(String.fromCharCode(10))
+      + String.fromCharCode(10, 10) + 'Substituir?')) return;
+  showToast('⏳ Guardando a foto… vai o relatório inteiro, leva uns segundos');
   let ok = 0;
   for (let i = 0; i < prontas.length; i++) {
-    if (await histGravar(prontas[i].k, PG_CACHE[prontas[i].k].dados, true) === 'ok') ok++;
+    if (await histGravar(prontas[i].k, prontas[i].dados, true, prontas[i].fonte) === 'ok') ok++;
   }
   showToast(ok === prontas.length
     ? '📸 Foto de ' + histRot(dia) + ' guardada — ' + ok + ' regiões'
     : 'Guardei ' + ok + ' de ' + prontas.length + ' regiões', 3500);
   await mxHistCarregarLista();
+  // Depois de salvar, a tela passa a mostrar o que acabou de ser salvo.
+  mxFonte = 'relatorio';
+  mxSetFonte('foto');
 }
 
 // ── Leitura ───────────────────────────────────────────────────────────────
@@ -3812,6 +3898,7 @@ async function mxHistCarregarLista() {
     mxHistLista = [];
     mxHistRegioes = {};
   }
+  await mxCarregarTimestamps();
   mxHistPreencherSelect();
   // A foto de hoje vem junto: o aviso mostra o que ela guardou, e e isso que
   // prova na tela de qual relatorio ela saiu.
@@ -4014,8 +4101,9 @@ function mxHistDetalheFoto(ctx) {
   return '<div style="font-size:11.5px;color:var(--gray-500);line-height:1.5;margin-top:6px;'
     + 'border-top:1px dashed #e8d9b8;padding-top:6px;">'
     + 'Dentro da foto, já em campo: ' + partes.join(' · ') + '. '
-    + 'A tira lá em cima (<i>Relatório publicado</i>) é outra coisa: é a hora do relatório '
-    + 'mais recente de cada região, que é o que as tabelas abaixo mostram.</div>';
+    + (mxFonte === 'foto'
+        ? 'É o que as tabelas abaixo mostram.'
+        : 'As tabelas abaixo são o relatório mais recente, não esta foto.') + '</div>';
 }
 
 // So chama de "manha" quando as horas gravadas na foto dizem isso. Quando a
@@ -4031,6 +4119,43 @@ function histOrigemRot(dia) {
     return 'do relatório da manhã';
   }
   return 'do primeiro relatório de cada região no dia';
+}
+
+// De onde a tela esta falando. O painel abre na foto que o Igor salvou; o
+// relatorio publicado fica a um clique. Sem essa barra os dois numeros do Sul
+// apareciam na mesma pagina sem nada dizendo qual era qual.
+function mxFonteBarra() {
+  const naFoto = mxFonte === 'foto';
+  const horas = PG_REGIOES.filter(x => PG_CACHE[x.k])
+    .map(x => x.rot + ' ' + (histHora(PG_CACHE[x.k].atualizado) || '--')).join(' · ');
+  const instante = v => { const d = new Date(v || 0); return isNaN(d) ? 0 : d.getTime(); };
+  const novas = PG_REGIOES.filter(x => PG_CACHE[x.k] && MX_TS[x.k]
+    && instante(MX_TS[x.k]) - instante(PG_CACHE[x.k].atualizado) > 60000);
+  const btn = (f, rot) => '<button class="pg-tipo-btn" onclick="mxSetFonte(&quot;'
+    + f + '&quot;)">' + rot + '</button>';
+  let cor, fundo, borda, txt, acao;
+  if (naFoto) {
+    cor = '#14487e'; fundo = '#f3f8ff'; borda = '#cfe2f7';
+    txt = '<b>📷 Você está vendo a foto de ' + histRot(mxFotoDoDia) + '</b>, do relatório de cada '
+      + 'região na hora em que você salvou: ' + horas + '. Republicar a capa depois não mexe nesses números.';
+    if (novas.length) {
+      txt += ' <span style="color:#9c2a1c;">' + novas.map(x => x.rot + ' republicou às ' + histHora(MX_TS[x.k])).join(', ') + '.</span>';
+    }
+    acao = btn('relatorio', '↻ Ver o relatório mais recente');
+  } else {
+    cor = '#7a5a10'; fundo = '#fffcf5'; borda = '#f0d8a8';
+    txt = '<b>↻ Você está vendo o relatório publicado</b> — ' + horas + '. '
+      + (mxFotoFalhou === 'nenhuma'
+          ? 'Ainda não há foto guardada com detalhe: clique em <b>Salvar foto de hoje</b> pra criar a de hoje.'
+          : mxFotoFalhou === 'antiga'
+            ? 'A última foto com detalhe não é de hoje: clique em <b>Salvar foto de hoje</b> depois que as regiões publicarem.'
+            : 'Estes números mudam toda vez que uma região republica.');
+    acao = mxFotoFalhou ? '' : btn('foto', '📷 Voltar pra foto');
+  }
+  return '<div style="border:1px solid ' + borda + ';background:' + fundo + ';border-radius:12px;'
+    + 'padding:10px 14px;margin-bottom:12px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">'
+    + '<div style="flex:1;min-width:260px;font-size:12px;color:' + cor + ';line-height:1.5;">' + txt + '</div>'
+    + acao + '</div>';
 }
 
 function mxHistAviso(ctx) {
@@ -4162,15 +4287,39 @@ function mxSetDias(n) {
 }
 
 // ── Carregamento ──────────────────────────────────────────────────────────
+// Troca a fonte e recarrega. Recarrega mesmo: as duas falam das mesmas
+// regioes, entao o cache de uma nao serve pra outra.
+function mxSetFonte(f) {
+  if (mxFonte === f) return;
+  mxFonte = f;
+  mxFotoFalhou = '';
+  PG_REGIOES.forEach(x => { delete PG_CACHE[x.k]; });
+  mxCarregar(true);
+}
+
 async function mxCarregar(forcar) {
   if (mxCarregando) return;
-  const faltam = PG_REGIOES.filter(x => forcar || !PG_CACHE[x.k]);
+  const faltam = PG_REGIOES.filter(x => forcar || !PG_CACHE[x.k] || PG_CACHE[x.k].fonte !== mxFonte);
   if (!faltam.length) { mxRender(); return; }
   mxCarregando = true;
   document.getElementById('mx-tabelas').innerHTML =
     '<div style="text-align:center;padding:50px;color:var(--gray-400);font-size:13px;">⏳ Carregando ' + faltam.length + ' região(ões)…</div>';
   try {
     await Promise.all(faltam.map(x => pgFetchRegiao(x.k, forcar)));
+    // Sem foto de hoje guardada nao ha o que mostrar: cai no relatorio e diz
+    // por que, em vez de abrir uma tela vazia.
+    if (mxFonte === 'foto') {
+      const comDados = PG_REGIOES.filter(x => (PG_CACHE[x.k] || {}).dados.length);
+      const deHoje = comDados.filter(x => PG_CACHE[x.k].dia === histHoje());
+      if (!comDados.length || !deHoje.length) {
+        mxFotoFalhou = comDados.length ? 'antiga' : 'nenhuma';
+        mxFonte = 'relatorio';
+        PG_REGIOES.forEach(x => { delete PG_CACHE[x.k]; });
+        mxCarregando = false;
+        return mxCarregar(true);
+      }
+      mxFotoDoDia = PG_CACHE[deHoje[0].k].dia;
+    }
     mxRender();
     showToast('✔ ' + (MX_BLOCOS.carteira ? MX_BLOCOS.carteira.rows.length : 0) + ' registros no recorte', 2000);
     mxHistCarregarLista();
