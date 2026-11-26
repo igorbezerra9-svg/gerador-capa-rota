@@ -817,6 +817,7 @@
               <th style="padding:8px 10px;text-align:left;font-size:9px;text-transform:uppercase;letter-spacing:1px;white-space:nowrap;">N. Serviço</th>
               <th style="padding:8px 10px;text-align:left;font-size:9px;text-transform:uppercase;letter-spacing:1px;">Tipo</th>
               <th style="padding:8px 10px;text-align:left;font-size:9px;text-transform:uppercase;letter-spacing:1px;">Equipe</th>
+              <th style="padding:8px 10px;text-align:left;font-size:9px;text-transform:uppercase;letter-spacing:1px;">Estado</th>
               <th style="padding:8px 10px;text-align:left;font-size:9px;text-transform:uppercase;letter-spacing:1px;">Cliente</th>
               <th style="padding:8px 10px;text-align:left;font-size:9px;text-transform:uppercase;letter-spacing:1px;">Endereço</th>
               <th style="padding:8px 10px;text-align:left;font-size:9px;text-transform:uppercase;letter-spacing:1px;white-space:nowrap;">Prazo</th>
@@ -2464,6 +2465,18 @@ document.addEventListener('click', function(e) {
   if (e.target === modal) pgFecharModal();
 });
 
+// O Estado TdC e o que explica a diferenca entre a Carteira e o Enviado a
+// campo. Sem ele na lista, as duas telas ficam iguais e nao da pra saber
+// quem esta parado em programaveis ou a reprogramar.
+function pgEstadoPill(r) {
+  const txt = String(r['Estado TdC'] || '').trim() || '—';
+  const campo = mxEmCampo(r);
+  return '<span style="background:' + (campo ? '#eaf7ef' : '#fff1dc')
+    + ';color:' + (campo ? '#1a7a40' : '#a05a00')
+    + ';border-radius:4px;padding:2px 6px;font-size:9.5px;font-weight:700;white-space:nowrap;">'
+    + mxEsc(txt) + '</span>';
+}
+
 function pgFiltrarModal() {
   const q = document.getElementById('pg-modal-search').value.toLowerCase();
   const filtrado = q
@@ -2471,7 +2484,8 @@ function pgFiltrarModal() {
         String(r['Numero de Serviço']||'').toLowerCase().includes(q) ||
         String(r['Nome e Sobrenome Cliente']||'').toLowerCase().includes(q) ||
         String(r['Endereço Completo']||'').toLowerCase().includes(q) ||
-        String(r['Código Equipe']||'').toLowerCase().includes(q)
+        String(r['Código Equipe']||'').toLowerCase().includes(q) ||
+        String(r['Estado TdC']||'').toLowerCase().includes(q)
       )
     : pgModalDados;
 
@@ -2512,6 +2526,7 @@ function pgFiltrarModal() {
         + (tipo.split(' - ').slice(1).join(' - ') ? '<br><span style="font-size:9px;color:#8097b8;">' + tipo.split(' - ').slice(1).join(' - ').toLowerCase() + '</span>' : '')
         + '</td>'
       + '<td style="padding:7px 10px;font-size:11px;font-family:monospace;color:#1565c0;white-space:nowrap;">' + cod + '</td>'
+      + '<td style="padding:7px 10px;white-space:nowrap;">' + pgEstadoPill(r) + '</td>'
       + '<td style="padding:7px 10px;font-size:12px;font-weight:600;">' + cliente + '</td>'
       + '<td style="padding:7px 10px;font-size:11px;color:#2a3a50;">' + end + gps + '</td>'
       + '<td style="padding:7px 10px;font-size:11px;white-space:nowrap;font-weight:600;">' + prazo + '</td>'
@@ -2520,7 +2535,7 @@ function pgFiltrarModal() {
   });
 
   document.getElementById('pg-modal-body').innerHTML = html ||
-    '<tr><td colspan="7" style="padding:20px;text-align:center;color:#8097b8;">Nenhuma OS encontrada</td></tr>';
+    '<tr><td colspan="8" style="padding:20px;text-align:center;color:#8097b8;">Nenhuma OS encontrada</td></tr>';
 }
 
 function pgAbrirModalEquipe(codEquipe, prioFiltro) {
@@ -2569,6 +2584,7 @@ function pgCopiarModal() {
       + '\n📋 ' + tipoFull
       + '\n📍 ' + end + ' — ' + muni
       + '\n⏰ Prazo: ' + prazo
+      + '\n🏷 Estado: ' + (String(r['Estado TdC'] || '').trim() || '—')
       + gps;
   });
 
@@ -3111,10 +3127,15 @@ function mxColDe(r, ctx) {
 
 // ── Agrupamento em árvore ─────────────────────────────────────────────────
 function mxAgrupar(rows, ctx, niveis, prefixo) {
-  const raiz = { rot:'Total geral', chave: prefixo + '|', nivel:-1, filhos:{}, cont:{}, total:0, linhas:rows };
+  const raiz = { rot:'Total geral', chave: prefixo + '|', nivel:-1, filhos:{}, cont:{}, fora:{}, total:0, linhas:rows };
   rows.forEach(r => {
     const col = mxColDe(r, ctx);
+    // "fora" = esta na carteira e nao saiu pra campo. Contado aqui junto com
+    // o resto: a celula so le o numero, nao varre as linhas outra vez.
+    const parado = mxEmCampo(r) ? 0 : 1;
     raiz.cont[col] = (raiz.cont[col] || 0) + 1;
+    raiz.fora[col] = (raiz.fora[col] || 0) + parado;
+    raiz.fora.__tot = (raiz.fora.__tot || 0) + parado;
     raiz.total++;
     let no = raiz, caminho = prefixo;
     for (let i = 0; i < niveis.length; i++) {
@@ -3122,12 +3143,14 @@ function mxAgrupar(rows, ctx, niveis, prefixo) {
       caminho = caminho + '|' + lab;
       if (!no.filhos[lab]) {
         no.filhos[lab] = {
-          rot: lab, chave: caminho, nivel: i, filhos: {}, cont: {}, total: 0,
+          rot: lab, chave: caminho, nivel: i, filhos: {}, cont: {}, fora: {}, total: 0,
           linhas: [], ordem: MX_ORDEM[lab] === undefined ? 99 : MX_ORDEM[lab]
         };
       }
       no = no.filhos[lab];
       no.cont[col] = (no.cont[col] || 0) + 1;
+      no.fora[col] = (no.fora[col] || 0) + parado;
+      no.fora.__tot = (no.fora.__tot || 0) + parado;
       no.total++;
       no.linhas.push(r);
     }
@@ -3165,7 +3188,21 @@ function mxCelula(no, col) {
   if (!n) return '<td style="padding:6px 10px;text-align:center;color:#d4dbe6;' + (col.destaque ? 'background:' + col.destaque + ';' : '') + '">·</td>';
   return '<td onclick="mxAbrirCelula(' + idx + ',\'' + col.k + '\')" title="Clique pra ver as OS"'
     + ' style="padding:6px 10px;text-align:center;font-weight:700;color:' + col.cor + ';cursor:pointer;'
-    + (col.destaque ? 'background:' + col.destaque + ';' : '') + '">' + n + '</td>';
+    + (col.destaque ? 'background:' + col.destaque + ';' : '') + '">' + n + mxSeloParado(no, col.k) + '</td>';
+}
+
+// O selo da diferenca. So aparece na Carteira e so quando sobrou alguma coisa
+// que nao saiu pra campo: e o atalho pra pergunta "a carteira tem 17 e o campo
+// 9, cade as 8?" — sem ter que abrir as duas listas e comparar na mao.
+function mxSeloParado(no, colK) {
+  if (no.__modo !== 'carteira') return '';
+  const f = (no.fora && no.fora[colK]) || 0;
+  if (!f) return '';
+  return '<div onclick="event.stopPropagation();mxAbrirDiferenca(' + no.__idx + ',\'' + colK + '\')"'
+    + ' title="' + f + ' não saiu pra campo (programáveis / a reprogramar) — clique pra ver só essas"'
+    + ' style="margin:3px auto 0;display:table;background:#fff1dc;color:#a05a00;border:1px solid #f0d8b4;'
+    + 'border-radius:999px;padding:0 6px;font-size:9.5px;font-weight:800;line-height:15px;cursor:pointer;">🗂 '
+    + f + '</div>';
 }
 
 function mxLinhaHTML(no, cols, temFilhos, aberto) {
@@ -3185,7 +3222,7 @@ function mxLinhaHTML(no, cols, temFilhos, aberto) {
     + seta + ' ' + mxEsc(no.rot) + '</td>';
   cols.forEach(c => { h += mxCelula(no, c); });
   const totCor = no.nivel < 0 ? '#0d1b2a' : '#1a2535';
-  h += '<td onclick="mxAbrirCelula(' + idx + ',\'__tot\')" title="Clique pra ver as OS" style="padding:6px 12px;text-align:center;font-weight:800;color:' + totCor + ';background:#fdf6e8;cursor:pointer;">' + no.total + '</td>';
+  h += '<td onclick="mxAbrirCelula(' + idx + ',\'__tot\')" title="Clique pra ver as OS" style="padding:6px 12px;text-align:center;font-weight:800;color:' + totCor + ';background:#fdf6e8;cursor:pointer;">' + no.total + mxSeloParado(no, '__tot') + '</td>';
   return h + '</tr>';
 }
 
@@ -3219,7 +3256,9 @@ function mxTabela(modo, rows, ctx, titulo, sub, cabecalho, niveis, prefixo, eixo
     + ';background:' + (emCampo ? '#f3f8ff' : '#faf7ff') + ';display:flex;align-items:flex-start;gap:12px;flex-wrap:wrap;">'
     + '<div style="flex:1;min-width:220px;">'
     + '<div style="font-size:13.5px;font-weight:800;color:' + corModo + ';">' + rotModo + '</div>'
-    + (sub ? '<div style="font-size:11px;color:var(--gray-400);margin-top:2px;">' + sub + '</div>' : '')
+    + (sub ? '<div style="font-size:11px;color:var(--gray-400);margin-top:2px;">' + sub
+        + (emCampo ? '' : ' <b style="color:#a05a00;">O selo 🗂 é o que ainda não saiu pra campo: clique nele pra ver só essas.</b>')
+        + '</div>' : '')
     + '</div>'
     + '<div style="display:flex;gap:6px;flex-wrap:wrap;">'
     + '<button class="pg-tipo-btn" onclick="mxAbrirFechar(\'' + prefixo + '\',false)" title="Fecha todos os niveis">&#8863; Recolher</button>'
@@ -3411,6 +3450,20 @@ function mxAbrirCelula(idx, colK) {
   const rot = mxRotColuna(colK, ctx);
   mxAbrirLista(linhas, (no.__modo === 'campo' ? '🚚 Enviado a campo' : '📦 Carteira') + ' · ' + caminho + ' · ' + rot,
     (no.__modo === 'campo' ? 'em campo' : 'carteira') + ' · vencimento ' + rot);
+}
+
+// Abre so a diferenca daquela celula: o que esta na carteira do dia e nao
+// saiu pra campo. E a lista que faltava — antes era preciso abrir a celula da
+// Carteira, abrir a mesma celula do Enviado a campo e achar quem sobrou.
+function mxAbrirDiferenca(idx, colK) {
+  const no = mxNodos[idx];
+  if (!no || !no.__ctx) return;
+  const ctx = no.__ctx;
+  const linhas = no.linhas.filter(r => !mxEmCampo(r) && (colK === '__tot' || mxColDe(r, ctx) === colK));
+  const caminho = no.chave.split('|').slice(1).filter(Boolean).join(' › ') || 'Todas as regiões';
+  const rot = mxRotColuna(colK, ctx);
+  mxAbrirLista(linhas, '🗂 Não saiu pra campo · ' + caminho + ' · ' + rot,
+    'programáveis / a reprogramar · vencimento ' + rot);
 }
 
 function mxAbrirKPI(modo, tipo) {
