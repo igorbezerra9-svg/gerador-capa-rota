@@ -3875,7 +3875,6 @@ async function histSalvarAgora() {
 let mxHistLista = null;     // dias guardados, mais novo primeiro
 let mxHistRegioes = {};     // dia -> regioes que tem foto naquele dia
 let mxHistDia = '';         // dia escolhido pra comparar
-let mxHistModo = 'campo';   // qual bloco a comparação está olhando
 let mxHistVerFoto = false;  // mostrar a foto guardada do jeito que ela está
 const MX_HIST_CACHE = {};   // dia -> linhas vindas do Supabase
 
@@ -3958,7 +3957,6 @@ async function mxHistEscolher(dia) {
   mxRender();
 }
 
-function mxHistSetModo(m) { mxHistModo = m; mxRender(); }
 
 // Soma a foto guardada respeitando os filtros que estão na tela, e joga cada
 // ordem na MESMA coluna que ela ocuparia hoje — a comparação é por data de
@@ -4194,7 +4192,6 @@ function mxHistAviso(ctx) {
 // nada tenha sido resolvido: as ordens sem equipe simplesmente nao vieram no
 // relatorio. Verde aqui nao quer dizer progresso.
 function mxHistAlertaCarteira() {
-  if (mxHistModo !== 'carteira') return '';
   const inc = PG_REGIOES.filter(x => PG_CACHE[x.k] && !PG_CACHE[x.k].temCarteira);
   if (!inc.length) return '';
   return '<div style="background:#fdecea;border:1px solid #f3b7af;border-radius:10px;padding:9px 12px;'
@@ -4202,35 +4199,22 @@ function mxHistAlertaCarteira() {
     + '<b>⚠ Não leia a carteira de ' + inc.map(x => x.rot).join(', ') + ' aqui.</b> '
     + 'O relatório dessa(s) região(ões) veio só com o que já tem equipe, então as ordens sem equipe '
     + 'sumiram da conta — o verde é ordem que não veio no arquivo, não ordem resolvida. '
-    + 'O <i>Enviado a campo</i> ali do lado continua valendo.</div>';
+    + 'O <i>Enviado a campo</i> acima continua valendo.</div>';
 }
 
-function mxHistBloco(ctx) {
-  if (!mxHistDia) return mxHistAviso(ctx);
-  const antes = mxHistContagem(mxHistDia, mxHistModo, ctx);
-  const agora = mxContagemAtual(mxHistModo, ctx);
-  const pill = (m, rot) => '<button class="pg-tipo-btn' + (mxHistModo === m ? ' active' : '')
-    + '" onclick="mxHistSetModo(\'' + m + '\')">' + rot + '</button>';
-  let h = '<div style="border:1px solid #f0d8a8;background:#fffcf5;border-radius:16px;padding:14px;margin-bottom:18px;">'
-    + '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px;">'
-    + '<div style="font-size:16px;font-weight:800;color:#8a6410;">⏳ Comparado com '
-    + histRot(mxHistDia) + '</div>'
-    + pill('campo', '🚚 Enviado a campo') + pill('carteira', '📦 Carteira')
-    + '</div>'
-    + '<div style="font-size:11px;color:var(--gray-400);margin-bottom:10px;">'
-    + 'Número grande = como está agora. Embaixo, quanto mudou desde ' + histRot(mxHistDia)
-    + ' — <b style="color:#1a7a40;">verde para menos</b>, <b style="color:#c0392b;">vermelho para mais</b>. '
-    + 'A comparação é por data de vencimento: a coluna 26/11 de hoje fala das mesmas ordens que a coluna 26/11 daquele dia.</div>'
-    + mxHistAlertaCarteira()
+// Um recorte da comparacao. Os dois saem empilhados, com as mesmas colunas:
+// o que foi pra campo em cima, o que sobrou na carteira embaixo. E assim que
+// o Igor le o painel, entao e assim que a comparacao tambem sai.
+function mxHistRecorte(ctx, modo, comFoto) {
+  const emCampo = modo === 'campo';
+  const antes = mxHistContagem(mxHistDia, modo, ctx);
+  const agora = mxContagemAtual(modo, ctx);
+  let h = '<div style="font-size:13px;font-weight:800;color:' + (emCampo ? '#14487e' : '#573a9c')
+    + ';margin:' + (emCampo ? '0' : '18px') + ' 2px 6px;">'
+    + (emCampo ? '🚚 Enviado a campo' : '📦 Carteira') + '</div>'
+    + (emCampo ? '' : mxHistAlertaCarteira())
     + mxHistCabecalho(ctx);
   const soma = { agora: {}, antes: {} };
-  // So entram na tabela as regioes que TEM foto daquele dia. Sem isso, uma
-  // regiao que nao publicou aparece como "+tudo" e estraga o total.
-  const comFoto = {};
-  (MX_HIST_CACHE[mxHistDia] || []).forEach(p => {
-    const r = (p.dados && p.dados.reg) || String(p.regiao).split('|')[2];
-    if (r) comFoto[r] = true;
-  });
   PG_REGIOES.filter(x => comFoto[x.k]).forEach(reg => {
     const a = agora[reg.k] || {}, b = antes[reg.k] || {};
     h += '<tr style="border-bottom:0.5px solid #f0e6d2;background:#fff;">'
@@ -4242,14 +4226,32 @@ function mxHistBloco(ctx) {
     });
     soma.agora.__tot = (soma.agora.__tot || 0) + (a.__tot || 0);
     soma.antes.__tot = (soma.antes.__tot || 0) + (b.__tot || 0);
-    h += mxHistCelula(a.__tot || 0, b.__tot || 0, '#fdf6e8');
-    h += '</tr>';
+    h += mxHistCelula(a.__tot || 0, b.__tot || 0, '#fdf6e8') + '</tr>';
   });
   h += '<tr style="background:#f7f1e4;border-top:1px solid #e8d9b8;">'
     + '<td style="padding:5px 12px;font-weight:800;color:#0d1b2a;">Total geral</td>';
   ctx.cols.forEach(c => { h += mxHistCelula(soma.agora[c.k] || 0, soma.antes[c.k] || 0, c.destaque); });
-  h += mxHistCelula(soma.agora.__tot || 0, soma.antes.__tot || 0, '#fdf6e8');
-  h += '</tr></tbody></table></div>';
+  return h + mxHistCelula(soma.agora.__tot || 0, soma.antes.__tot || 0, '#fdf6e8') + '</tr></tbody></table></div>';
+}
+
+function mxHistBloco(ctx) {
+  if (!mxHistDia) return mxHistAviso(ctx);
+  // So entram na tabela as regioes que TEM foto daquele dia. Sem isso, uma
+  // regiao que nao publicou aparece como "+tudo" e estraga o total.
+  const comFoto = {};
+  (MX_HIST_CACHE[mxHistDia] || []).forEach(p => {
+    const r = (p.dados && p.dados.reg) || String(p.regiao).split('|')[2];
+    if (r) comFoto[r] = true;
+  });
+  let h = '<div style="border:1px solid #f0d8a8;background:#fffcf5;border-radius:16px;padding:14px;margin-bottom:18px;">'
+    + '<div style="font-size:16px;font-weight:800;color:#8a6410;margin-bottom:6px;">⏳ Comparado com '
+    + histRot(mxHistDia) + '</div>'
+    + '<div style="font-size:11px;color:var(--gray-400);margin-bottom:12px;">'
+    + 'Número grande = como está agora. Embaixo, quanto mudou desde ' + histRot(mxHistDia)
+    + ' — <b style="color:#1a7a40;">verde para menos</b>, <b style="color:#c0392b;">vermelho para mais</b>. '
+    + 'A comparação é por data de vencimento: a coluna 26/11 de hoje fala das mesmas ordens que a coluna 26/11 daquele dia.</div>'
+    + mxHistRecorte(ctx, 'campo', comFoto)
+    + mxHistRecorte(ctx, 'carteira', comFoto);
   h += mxHistBotaoFoto(mxHistDia) + (mxHistVerFoto ? mxHistTabelaFoto(ctx, mxHistDia) : '');
   const semFoto = PG_REGIOES.filter(x => !comFoto[x.k]);
   if (semFoto.length === PG_REGIOES.length) {
