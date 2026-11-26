@@ -3687,19 +3687,9 @@ function histChave(dia, regiao) { return 'hist|' + dia + '|' + regiao; }
 function histHoje() { return mxKeyDe(new Date()); }
 function histRot(dia) { const p = String(dia).split('-'); return p[2] + '/' + p[1]; }
 
-// Rotulo em relacao a hoje: "hoje de manha", "ontem de manha", ou a data com
-// o dia da semana. Sem isso o seletor so mostrava numeros soltos.
 function histDiaMais(n) {
   const p = histHoje().split('-');
   return mxKeyDe(new Date(+p[0], +p[1] - 1, +p[2] + n));
-}
-
-function histQuando(dia, curto) {
-  if (dia === histHoje()) return 'hoje de manhã';
-  if (dia === histDiaMais(-1)) return 'ontem de manhã';
-  const p = String(dia).split('-');
-  const sem = MX_DIA_SEM[new Date(+p[0], +p[1] - 1, +p[2]).getDay()];
-  return curto ? sem + ' de manhã' : 'a manhã de ' + sem;
 }
 
 function histResumo(dados, regiao) {
@@ -3722,6 +3712,11 @@ function histResumo(dados, regiao) {
 // A foto do dia e o primeiro relatorio das 6h em diante. Antes disso ainda e
 // madrugada: um envio de 00:20 nao representa o dia de trabalho nenhum.
 const MX_HIST_HORA_MIN = 6;
+
+// Dia em que a contagem comeca. As fotos anteriores sairam de relatorios
+// publicados com filtro de estado -- carteira truncada -- entao nao servem de
+// termo de comparacao e ficam fora da lista.
+const MX_HIST_INICIO = '2026-11-26';
 
 async function histGuardada(dia, regiao) {
   const res = await fetch(SB_URL + '/rest/v1/snapshots?regiao=eq.'
@@ -3830,7 +3825,7 @@ async function mxHistCarregarLista() {
 // mistura "o dia andou" com "o dia rendeu", que nao e a pergunta.
 function mxHistDiasComparaveis() {
   const hj = histHoje();
-  return (mxHistLista || []).filter(d => d < hj);
+  return (mxHistLista || []).filter(d => d < hj && d >= MX_HIST_INICIO);
 }
 
 function mxHistPreencherSelect() {
@@ -3847,7 +3842,7 @@ function mxHistPreencherSelect() {
   let h = '<option value="">— sem comparação —</option>';
   dias.forEach(d => {
     h += '<option value="' + d + '"' + (d === mxHistDia ? ' selected' : '') + '>'
-      + histRot(d) + ' · ' + histQuando(d, true) + '</option>';
+      + histRot(d) + '</option>';
   });
   sel.innerHTML = h;
 }
@@ -3995,8 +3990,7 @@ function mxHistAviso(ctx) {
     tit = '📸 Foto de hoje (' + histRot(hj) + ') guardada — as '
       + PG_REGIOES.length + ' regiões, ' + histOrigemRot(hj);
     txt = 'Hoje não há o que comparar. A comparação começa amanhã: quando subir o relatório de '
-      + histRot(amK) + ', escolha <b>' + histRot(hj) + '</b> em <i>Comparar com</i> e a tela mostra a manhã de '
-      + histRot(amK) + ' contra a manhã de ' + histRot(hj) + '.';
+      + histRot(amK) + ', escolha <b>' + histRot(hj) + '</b> em <i>Comparar com</i>.';
   }
   if (mxHistDiasComparaveis().length) {
     txt += ' Pra olhar um dia anterior, escolha em <i>Comparar com</i> aqui em cima.';
@@ -4031,11 +4025,11 @@ function mxHistBloco(ctx) {
   let h = '<div style="border:1px solid #f0d8a8;background:#fffcf5;border-radius:16px;padding:14px;margin-bottom:18px;">'
     + '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px;">'
     + '<div style="font-size:16px;font-weight:800;color:#8a6410;">⏳ Comparado com '
-    + histQuando(mxHistDia) + ' (' + histRot(mxHistDia) + ')</div>'
+    + histRot(mxHistDia) + '</div>'
     + pill('campo', '🚚 Enviado a campo') + pill('carteira', '📦 Carteira')
     + '</div>'
     + '<div style="font-size:11px;color:var(--gray-400);margin-bottom:10px;">'
-    + 'Número grande = como está agora. Embaixo, quanto mudou desde ' + histQuando(mxHistDia)
+    + 'Número grande = como está agora. Embaixo, quanto mudou desde ' + histRot(mxHistDia)
     + ' — <b style="color:#1a7a40;">verde para menos</b>, <b style="color:#c0392b;">vermelho para mais</b>. '
     + 'A comparação é por data de vencimento: a coluna 26/11 de hoje fala das mesmas ordens que a coluna 26/11 daquele dia.</div>'
     + mxHistAlertaCarteira()
