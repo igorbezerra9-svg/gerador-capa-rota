@@ -2747,17 +2747,18 @@ async function publicarNuvem(regiao) {
   if (!allData.length) { showToast('Carregue um arquivo primeiro'); return; }
   showToast('⏳ Publicando ' + regiao + '...');
   try {
+    const carimbo = new Date().toISOString();
     const res = await sbFetch('POST', {
       regiao,
       dados: allData,
-      atualizado_em: new Date().toISOString()
+      atualizado_em: carimbo
     });
     if (res.ok || res.status === 201 || res.status === 200) {
       showToast('✔ Publicado! ' + regiao + ' atualizado na nuvem', 3000);
       checarTimestamps();
       // Primeiro envio do dia dessa regiao vira a foto da manha. O envio da
       // tarde nao mexe mais nela -- e isso que deixa comparar os dias depois.
-      histGravar(regiao, allData, false).then(st => {
+      histGravar(regiao, allData, false, carimbo).then(st => {
         if (st === 'ok') showToast('📸 Foto de ' + regiao + ' guardada no histórico', 3000);
       });
     } else {
@@ -3303,7 +3304,7 @@ function mxCarimbo() {
     return x.rot + ' ' + dt.toLocaleDateString('pt-BR', { day:'2-digit', month:'2-digit' }) + ' '
       + dt.toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit' });
   });
-  return partes.join(' · ');
+  return 'Relatório publicado: ' + partes.join(' · ');
 }
 
 // A tela inteira: "Enviado a campo" em cima, "Carteira" logo embaixo, com AS
@@ -3674,13 +3675,17 @@ async function histExiste(dia, regiao) {
 
 // forcar=false grava só se ainda não houver foto do dia — é assim que o que
 // fica guardado acaba sendo sempre o primeiro relatório da manhã.
-async function histGravar(regiao, dados, forcar) {
+async function histGravar(regiao, dados, forcar, fonte) {
   const dia = histHoje();
   try {
     if (!forcar && await histExiste(dia, regiao)) return 'ja';
     const res = await sbFetch('POST', {
       regiao: histChave(dia, regiao),
-      dados: { v: 1, dia, reg: regiao, total: dados.length, linhas: histResumo(dados, regiao) },
+      dados: { v: 1, dia, reg: regiao, total: dados.length,
+        // De que relatorio essa foto saiu. Sem isso nao da pra provar na tela
+        // que a foto e a da manha e nao a da tarde.
+        fonte: fonte || (PG_CACHE[regiao] && PG_CACHE[regiao].atualizado) || null,
+        linhas: histResumo(dados, regiao) },
       atualizado_em: new Date().toISOString()
     });
     return res.ok ? 'ok' : 'erro';
@@ -3737,6 +3742,9 @@ async function mxHistCarregarLista() {
     mxHistRegioes = {};
   }
   mxHistPreencherSelect();
+  // A foto de hoje vem junto: o aviso mostra o que ela guardou, e e isso que
+  // prova na tela de qual relatorio ela saiu.
+  if ((mxHistRegioes[histHoje()] || []).length) await mxHistBuscarDia(histHoje());
   // A lista chega depois do primeiro desenho da tabela. Sem redesenhar, o aviso
   // de cima ficava dizendo "ainda nao guardada" com a foto ja no banco.
   if (MX_BLOCOS.carteira) mxRender();
@@ -3769,20 +3777,25 @@ function mxHistPreencherSelect() {
   sel.innerHTML = h;
 }
 
+async function mxHistBuscarDia(dia) {
+  if (MX_HIST_CACHE[dia]) return MX_HIST_CACHE[dia];
+  try {
+    const res = await fetch(SB_URL + '/rest/v1/snapshots?regiao=like.'
+      + encodeURIComponent('hist|' + dia + '|') + '*&select=regiao,dados', {
+      headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY }
+    });
+    MX_HIST_CACHE[dia] = await res.json();
+  } catch (e) {
+    MX_HIST_CACHE[dia] = [];
+  }
+  return MX_HIST_CACHE[dia];
+}
+
 async function mxHistEscolher(dia) {
   mxHistDia = dia;
   if (dia && !MX_HIST_CACHE[dia]) {
     showToast('⏳ Buscando a foto de ' + histRot(dia) + '…');
-    try {
-      const res = await fetch(SB_URL + '/rest/v1/snapshots?regiao=like.'
-        + encodeURIComponent('hist|' + dia + '|') + '*&select=regiao,dados', {
-        headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY }
-      });
-      MX_HIST_CACHE[dia] = await res.json();
-    } catch (e) {
-      MX_HIST_CACHE[dia] = [];
-      showToast('Não consegui buscar: ' + e.message, 4000);
-    }
+    await mxHistBuscarDia(dia);
   }
   mxRender();
 }
@@ -3841,7 +3854,53 @@ function mxHistCelula(agora, antes, destaque) {
 
 // Em vez de sumir, o bloco conta o que esta guardado e quando a comparacao
 // comeca. Foi o "comparar com hoje" que confundiu: hoje nao ha o que comparar.
-function mxHistAviso() {
+function histHora(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return isNaN(d) ? '' : d.toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit' });
+}
+
+// O que a foto guardou, regiao por regiao, com a hora do relatorio de onde ela
+// saiu. E a prova na tela de que a foto e a da manha: o numero dela nao bate
+// com o da tabela de baixo quando a regiao republicou depois.
+function mxHistDetalheFoto(ctx) {
+  const hj = histHoje();
+  const regs = mxHistRegioes[hj] || [];
+  if (!regs.length || !ctx) return '';
+  const foto = mxHistContagem(hj, 'campo', ctx);
+  const horas = {};
+  (MX_HIST_CACHE[hj] || []).forEach(p => {
+    const r = (p.dados && p.dados.reg) || String(p.regiao).split('|')[2];
+    if (r) horas[r] = histHora(p.dados && p.dados.fonte);
+  });
+  const partes = PG_REGIOES.filter(x => regs.indexOf(x.k) >= 0).map(x => {
+    const n = (foto[x.k] && foto[x.k].__tot) || 0;
+    return MX_REG_ROT[x.k] + ' <b>' + n.toLocaleString('pt-BR') + '</b>'
+      + (horas[x.k] ? ' <span style="opacity:.65;">(relatório de ' + horas[x.k] + ')</span>' : '');
+  });
+  return '<div style="font-size:11.5px;color:var(--gray-500);line-height:1.5;margin-top:6px;'
+    + 'border-top:1px dashed #e8d9b8;padding-top:6px;">'
+    + 'Dentro da foto, já em campo: ' + partes.join(' · ') + '. '
+    + 'A tira lá em cima (<i>Relatório publicado</i>) é outra coisa: é a hora do relatório '
+    + 'mais recente de cada região, que é o que as tabelas abaixo mostram.</div>';
+}
+
+// So chama de "manha" quando as horas gravadas na foto dizem isso. Quando a
+// foto nao tem hora (as de antes dessa versao), diz o que e verdade sempre:
+// foi o primeiro relatorio da regiao naquele dia.
+function histOrigemRot(dia) {
+  const horas = (MX_HIST_CACHE[dia] || [])
+    .map(p => p.dados && p.dados.fonte)
+    .filter(Boolean)
+    .map(f => new Date(f).getHours());
+  if (horas.length === (mxHistRegioes[dia] || []).length && horas.length
+      && horas.every(h => h < 12)) {
+    return 'do relatório da manhã';
+  }
+  return 'do primeiro relatório de cada região no dia';
+}
+
+function mxHistAviso(ctx) {
   const hj = histHoje();
   const amK = histDiaMais(1);
   const regs = mxHistRegioes[hj] || [];
@@ -3858,7 +3917,7 @@ function mxHistAviso() {
       + '<b>Salvar foto de hoje</b> que eu completo.';
   } else {
     tit = '📸 Foto de hoje (' + histRot(hj) + ') guardada — as '
-      + PG_REGIOES.length + ' regiões, do relatório da manhã';
+      + PG_REGIOES.length + ' regiões, ' + histOrigemRot(hj);
     txt = 'Hoje não há o que comparar. A comparação começa amanhã: quando subir o relatório de '
       + histRot(amK) + ', escolha <b>' + histRot(hj) + '</b> em <i>Comparar com</i> e a tela mostra a manhã de '
       + histRot(amK) + ' contra a manhã de ' + histRot(hj) + '.';
@@ -3868,11 +3927,12 @@ function mxHistAviso() {
   }
   return '<div style="border:1px solid #f0d8a8;background:#fffcf5;border-radius:16px;padding:12px 14px;margin-bottom:18px;">'
     + '<div style="font-size:14px;font-weight:800;color:#8a6410;margin-bottom:4px;">' + tit + '</div>'
-    + '<div style="font-size:11.5px;color:var(--gray-500);line-height:1.5;">' + txt + '</div></div>';
+    + '<div style="font-size:11.5px;color:var(--gray-500);line-height:1.5;">' + txt + '</div>'
+    + mxHistDetalheFoto(ctx) + '</div>';
 }
 
 function mxHistBloco(ctx) {
-  if (!mxHistDia) return mxHistAviso();
+  if (!mxHistDia) return mxHistAviso(ctx);
   const antes = mxHistContagem(mxHistDia, mxHistModo, ctx);
   const agora = mxContagemAtual(mxHistModo, ctx);
   const pill = (m, rot) => '<button class="pg-tipo-btn' + (mxHistModo === m ? ' active' : '')
