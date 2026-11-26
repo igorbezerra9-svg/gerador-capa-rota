@@ -3672,12 +3672,15 @@ const MX_HIST_HORA_MIN = 6;
 
 async function histGuardada(dia, regiao) {
   const res = await fetch(SB_URL + '/rest/v1/snapshots?regiao=eq.'
-    + encodeURIComponent(histChave(dia, regiao)) + '&select=dados', {
+    + encodeURIComponent(histChave(dia, regiao)) + '&select=dados,atualizado_em', {
     headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY }
   });
   const rows = await res.json();
   if (!rows.length) return null;
-  return { fonte: (rows[0].dados && rows[0].dados.fonte) || null };
+  const d = rows[0].dados || {};
+  // `fonte` e a hora do relatorio; `quando` e so pra decidir se a foto ja e
+  // das 6h em diante, e cai na hora da gravacao quando `fonte` nao existe.
+  return { fonte: d.fonte || null, quando: d.fonte || rows[0].atualizado_em || null };
 }
 
 async function histExiste(dia, regiao) {
@@ -3698,8 +3701,7 @@ async function histGravar(regiao, dados, forcar, fonte) {
       const ja = await histGuardada(dia, regiao);
       // Uma foto de madrugada cede o lugar pra primeira da manha; uma que ja e
       // das 6h em diante fica como esta -- so o botao troca.
-      // Foto sem hora gravada e de antes dessa versao: tambem cede o lugar.
-      if (ja && ja.fonte && new Date(ja.fonte).getHours() >= MX_HIST_HORA_MIN) return 'ja';
+      if (ja && ja.quando && new Date(ja.quando).getHours() >= MX_HIST_HORA_MIN) return 'ja';
     }
     const res = await sbFetch('POST', {
       regiao: histChave(dia, regiao),
@@ -3952,6 +3954,21 @@ function mxHistAviso(ctx) {
     + mxHistDetalheFoto(ctx) + '</div>';
 }
 
+// Numa regiao com carteira incompleta, a coluna de carteira despenca sem que
+// nada tenha sido resolvido: as ordens sem equipe simplesmente nao vieram no
+// relatorio. Verde aqui nao quer dizer progresso.
+function mxHistAlertaCarteira() {
+  if (mxHistModo !== 'carteira') return '';
+  const inc = PG_REGIOES.filter(x => PG_CACHE[x.k] && !PG_CACHE[x.k].temCarteira);
+  if (!inc.length) return '';
+  return '<div style="background:#fdecea;border:1px solid #f3b7af;border-radius:10px;padding:9px 12px;'
+    + 'margin-bottom:10px;font-size:11.5px;color:#9c2a1c;line-height:1.5;">'
+    + '<b>⚠ Não leia a carteira de ' + inc.map(x => x.rot).join(', ') + ' aqui.</b> '
+    + 'O relatório dessa(s) região(ões) veio só com o que já tem equipe, então as ordens sem equipe '
+    + 'sumiram da conta — o verde é ordem que não veio no arquivo, não ordem resolvida. '
+    + 'O <i>Enviado a campo</i> ali do lado continua valendo.</div>';
+}
+
 function mxHistBloco(ctx) {
   if (!mxHistDia) return mxHistAviso(ctx);
   const antes = mxHistContagem(mxHistDia, mxHistModo, ctx);
@@ -3968,6 +3985,7 @@ function mxHistBloco(ctx) {
     + 'Número grande = como está agora. Embaixo, quanto mudou desde ' + histQuando(mxHistDia)
     + ' — <b style="color:#1a7a40;">verde para menos</b>, <b style="color:#c0392b;">vermelho para mais</b>. '
     + 'A comparação é por data de vencimento: a coluna 26/11 de hoje fala das mesmas ordens que a coluna 26/11 daquele dia.</div>'
+    + mxHistAlertaCarteira()
     + '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:12px;white-space:nowrap;">'
     + '<thead><tr style="background:#0d1b2a;color:#fff;">'
     + '<th style="padding:8px 12px;text-align:left;font-size:9px;text-transform:uppercase;letter-spacing:1px;">Região</th>';
