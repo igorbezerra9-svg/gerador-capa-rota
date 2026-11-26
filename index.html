@@ -3790,6 +3790,7 @@ let mxHistLista = null;     // dias guardados, mais novo primeiro
 let mxHistRegioes = {};     // dia -> regioes que tem foto naquele dia
 let mxHistDia = '';         // dia escolhido pra comparar
 let mxHistModo = 'campo';   // qual bloco a comparação está olhando
+let mxHistVerFoto = false;  // mostrar a foto guardada do jeito que ela está
 const MX_HIST_CACHE = {};   // dia -> linhas vindas do Supabase
 
 async function mxHistCarregarLista() {
@@ -3912,6 +3913,57 @@ function mxContagemAtual(modo, ctx) {
   return out;
 }
 
+function mxHistCabecalho(ctx) {
+  let h = '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:12px;white-space:nowrap;">'
+    + '<thead><tr style="background:#0d1b2a;color:#fff;">'
+    + '<th style="padding:8px 12px;text-align:left;font-size:9px;text-transform:uppercase;letter-spacing:1px;">Região</th>';
+  ctx.cols.forEach(c => {
+    h += '<th style="padding:6px 10px;text-align:center;font-size:9px;text-transform:uppercase;letter-spacing:.5px;">' + c.l1
+      + (c.l2 ? '<br><span style="font-size:8px;opacity:.65;font-weight:400;text-transform:none;">' + c.l2 + '</span>' : '') + '</th>';
+  });
+  return h + '<th style="padding:6px 12px;text-align:center;font-size:9px;text-transform:uppercase;letter-spacing:1px;'
+    + 'background:#e8a020;color:#0d1b2a;">Total</th></tr></thead><tbody>';
+}
+
+// A foto como ela esta guardada. Nao e "agora": e o que ficou no banco na hora
+// em que o botao foi clicado, e republicar a capa depois nao mexe nela.
+function mxHistTabelaFoto(ctx, dia) {
+  const regs = (mxHistRegioes[dia] || []);
+  if (!regs.length) return '';
+  const foto = mxHistContagem(dia, mxHistModo, ctx);
+  const cel = (n, destaque) => '<td style="padding:5px 10px;text-align:center;'
+    + (destaque ? 'background:' + destaque + ';' : '') + 'font-weight:700;font-size:12px;color:'
+    + (n ? '#1a2535' : '#d4dbe6') + ';">' + (n || '·') + '</td>';
+  let h = '<div style="margin-top:8px;border:1px solid #d8e2ef;border-radius:12px;padding:10px;background:#fbfdff;">'
+    + '<div style="font-size:11px;font-weight:800;color:#44607f;margin-bottom:7px;">'
+    + '📷 A foto de ' + histRot(dia) + ' como ela está guardada — '
+    + (mxHistModo === 'campo' ? 'enviado a campo' : 'carteira')
+    + ' <span style="font-weight:400;opacity:.75;">(use os botões aí em cima pra trocar)</span></div>'
+    + mxHistCabecalho(ctx);
+  const soma = {};
+  PG_REGIOES.filter(x => regs.indexOf(x.k) >= 0).forEach(reg => {
+    const a = foto[reg.k] || {};
+    h += '<tr style="border-bottom:0.5px solid #e9eff6;background:#fff;">'
+      + '<td style="padding:5px 12px;font-weight:700;color:#0d1b2a;">' + MX_REG_ROT[reg.k] + '</td>';
+    ctx.cols.forEach(c => { soma[c.k] = (soma[c.k] || 0) + (a[c.k] || 0); h += cel(a[c.k] || 0, c.destaque); });
+    soma.__tot = (soma.__tot || 0) + (a.__tot || 0);
+    h += cel(a.__tot || 0, '#fdf6e8') + '</tr>';
+  });
+  h += '<tr style="background:#eef3f9;border-top:1px solid #d8e2ef;">'
+    + '<td style="padding:5px 12px;font-weight:800;color:#0d1b2a;">Total geral</td>';
+  ctx.cols.forEach(c => { h += cel(soma[c.k] || 0, c.destaque); });
+  return h + cel(soma.__tot || 0, '#fdf6e8') + '</tr></tbody></table></div></div>';
+}
+
+function mxHistBotaoFoto(dia) {
+  if (!(mxHistRegioes[dia] || []).length) return '';
+  return '<button class="pg-tipo-btn" style="margin-top:8px;" onclick="mxHistVerFotoToggle()">'
+    + (mxHistVerFoto ? '▴ Esconder a foto' : '▾ Ver a foto de ' + histRot(dia) + ' como ela está guardada')
+    + '</button>';
+}
+
+function mxHistVerFotoToggle() { mxHistVerFoto = !mxHistVerFoto; mxRender(); }
+
 function mxHistCelula(agora, antes, destaque) {
   const d = agora - antes;
   const cor = d === 0 ? '#8097b8' : (d < 0 ? '#1a7a40' : '#c0392b');
@@ -3998,7 +4050,9 @@ function mxHistAviso(ctx) {
   return '<div style="border:1px solid #f0d8a8;background:#fffcf5;border-radius:16px;padding:12px 14px;margin-bottom:18px;">'
     + '<div style="font-size:14px;font-weight:800;color:#8a6410;margin-bottom:4px;">' + tit + '</div>'
     + '<div style="font-size:11.5px;color:var(--gray-500);line-height:1.5;">' + txt + '</div>'
-    + mxHistDetalheFoto(ctx) + '</div>';
+    + mxHistDetalheFoto(ctx)
+    + mxHistBotaoFoto(hj)
+    + (mxHistVerFoto ? mxHistTabelaFoto(ctx, hj) : '') + '</div>';
 }
 
 // Numa regiao com carteira incompleta, a coluna de carteira despenca sem que
@@ -4033,15 +4087,7 @@ function mxHistBloco(ctx) {
     + ' — <b style="color:#1a7a40;">verde para menos</b>, <b style="color:#c0392b;">vermelho para mais</b>. '
     + 'A comparação é por data de vencimento: a coluna 26/11 de hoje fala das mesmas ordens que a coluna 26/11 daquele dia.</div>'
     + mxHistAlertaCarteira()
-    + '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:12px;white-space:nowrap;">'
-    + '<thead><tr style="background:#0d1b2a;color:#fff;">'
-    + '<th style="padding:8px 12px;text-align:left;font-size:9px;text-transform:uppercase;letter-spacing:1px;">Região</th>';
-  ctx.cols.forEach(c => {
-    h += '<th style="padding:6px 10px;text-align:center;font-size:9px;text-transform:uppercase;letter-spacing:.5px;">' + c.l1
-      + (c.l2 ? '<br><span style="font-size:8px;opacity:.65;font-weight:400;text-transform:none;">' + c.l2 + '</span>' : '') + '</th>';
-  });
-  h += '<th style="padding:6px 12px;text-align:center;font-size:9px;text-transform:uppercase;letter-spacing:1px;background:#e8a020;color:#0d1b2a;">Total</th>'
-    + '</tr></thead><tbody>';
+    + mxHistCabecalho(ctx);
   const soma = { agora: {}, antes: {} };
   // So entram na tabela as regioes que TEM foto daquele dia. Sem isso, uma
   // regiao que nao publicou aparece como "+tudo" e estraga o total.
@@ -4069,6 +4115,7 @@ function mxHistBloco(ctx) {
   ctx.cols.forEach(c => { h += mxHistCelula(soma.agora[c.k] || 0, soma.antes[c.k] || 0, c.destaque); });
   h += mxHistCelula(soma.agora.__tot || 0, soma.antes.__tot || 0, '#fdf6e8');
   h += '</tr></tbody></table></div>';
+  h += mxHistBotaoFoto(mxHistDia) + (mxHistVerFoto ? mxHistTabelaFoto(ctx, mxHistDia) : '');
   const semFoto = PG_REGIOES.filter(x => !comFoto[x.k]);
   if (semFoto.length === PG_REGIOES.length) {
     h += '<div style="font-size:11px;color:#c0392b;margin-top:8px;">Não achei nenhuma foto guardada desse dia.</div>';
