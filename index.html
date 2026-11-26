@@ -3324,7 +3324,10 @@ function mxRender() {
   mxCtxAtual = ctx;
   mxGuardarBloco('campo', campo, ctx);
   mxGuardarBloco('carteira', carteira, ctx);
-  const h = mxResumoTopo(ctx)
+  // A comparação vem primeiro: de manhã a pergunta é "ontem rendeu?", e a
+  // resposta nao pode estar no fim da pagina.
+  const h = mxHistBloco(ctx)
+    + mxResumoTopo(ctx)
     + mxGrupo(ctx, 'Por região e unidade operativa',
         'Clique num número pra ver as OS; clique na linha pra abrir o nível de baixo.',
         'Região · unidade · município',
@@ -3334,8 +3337,7 @@ function mxRender() {
         'Novas Conexões, Gestão Inadimplências e Gestão Perdas do jeito que o eOrder classifica. Clique na linha pra abrir por tipo de serviço.',
         'Processo · tipo de serviço',
         [r => MX_PROC_ROT[mxProcDe(r)] || 'Outros', r => mxSubDe(r)],
-        'B', 'D', 'por-processo')
-    + mxHistBloco(ctx);
+        'B', 'D', 'por-processo');
   document.getElementById('mx-tabelas').innerHTML = h;
   document.getElementById('mx-atualizado').textContent = mxCarimbo();
 }
@@ -3631,11 +3633,14 @@ function histRot(dia) { const p = String(dia).split('-'); return p[2] + '/' + p[
 
 // Rotulo em relacao a hoje: "hoje de manha", "ontem de manha", ou a data com
 // o dia da semana. Sem isso o seletor so mostrava numeros soltos.
+function histDiaMais(n) {
+  const p = histHoje().split('-');
+  return mxKeyDe(new Date(+p[0], +p[1] - 1, +p[2] + n));
+}
+
 function histQuando(dia, curto) {
-  const hj = new Date();
-  if (dia === mxKeyDe(hj)) return 'hoje de manhã';
-  const ontem = new Date(hj.getFullYear(), hj.getMonth(), hj.getDate() - 1);
-  if (dia === mxKeyDe(ontem)) return 'ontem de manhã';
+  if (dia === histHoje()) return 'hoje de manhã';
+  if (dia === histDiaMais(-1)) return 'ontem de manhã';
   const p = String(dia).split('-');
   const sem = MX_DIA_SEM[new Date(+p[0], +p[1] - 1, +p[2]).getDay()];
   return curto ? sem + ' de manhã' : 'a manhã de ' + sem;
@@ -3707,6 +3712,7 @@ async function histSalvarAgora() {
 
 // ── Leitura ───────────────────────────────────────────────────────────────
 let mxHistLista = null;     // dias guardados, mais novo primeiro
+let mxHistRegioes = {};     // dia -> regioes que tem foto naquele dia
 let mxHistDia = '';         // dia escolhido pra comparar
 let mxHistModo = 'campo';   // qual bloco a comparação está olhando
 const MX_HIST_CACHE = {};   // dia -> linhas vindas do Supabase
@@ -3717,21 +3723,46 @@ async function mxHistCarregarLista() {
       headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY }
     });
     const rows = await res.json();
-    const dias = {};
-    (rows || []).forEach(r => { const p = String(r.regiao).split('|'); if (p[1]) dias[p[1]] = 1; });
+    const dias = {}, porDia = {};
+    (rows || []).forEach(r => {
+      const p = String(r.regiao).split('|');
+      if (!p[1]) return;
+      dias[p[1]] = 1;
+      (porDia[p[1]] || (porDia[p[1]] = [])).push(p[2]);
+    });
     mxHistLista = Object.keys(dias).sort().reverse();
+    mxHistRegioes = porDia;
   } catch (e) {
     mxHistLista = [];
+    mxHistRegioes = {};
   }
   mxHistPreencherSelect();
+  // A lista chega depois do primeiro desenho da tabela. Sem redesenhar, o aviso
+  // de cima ficava dizendo "ainda nao guardada" com a foto ja no banco.
+  if (MX_BLOCOS.carteira) mxRender();
+}
+
+// So dias ANTERIORES entram na comparacao. A foto de hoje e da manha de hoje,
+// e os numeros da tela sao do relatorio mais recente do dia -- comparar os dois
+// mistura "o dia andou" com "o dia rendeu", que nao e a pergunta.
+function mxHistDiasComparaveis() {
+  const hj = histHoje();
+  return (mxHistLista || []).filter(d => d < hj);
 }
 
 function mxHistPreencherSelect() {
   const sel = document.getElementById('mx-hist-sel');
   if (!sel) return;
-  const hj = histHoje();
+  const dias = mxHistDiasComparaveis();
+  if (mxHistDia && dias.indexOf(mxHistDia) < 0) mxHistDia = '';
+  if (!dias.length) {
+    sel.innerHTML = '<option value="">— nenhum dia anterior guardado —</option>';
+    sel.disabled = true;
+    return;
+  }
+  sel.disabled = false;
   let h = '<option value="">— sem comparação —</option>';
-  (mxHistLista || []).forEach(d => {
+  dias.forEach(d => {
     h += '<option value="' + d + '"' + (d === mxHistDia ? ' selected' : '') + '>'
       + histRot(d) + ' · ' + histQuando(d, true) + '</option>';
   });
@@ -3808,8 +3839,40 @@ function mxHistCelula(agora, antes, destaque) {
     + '<div style="font-size:10px;font-weight:700;color:' + cor + ';">' + sinal + '</div></td>';
 }
 
+// Em vez de sumir, o bloco conta o que esta guardado e quando a comparacao
+// comeca. Foi o "comparar com hoje" que confundiu: hoje nao ha o que comparar.
+function mxHistAviso() {
+  const hj = histHoje();
+  const amK = histDiaMais(1);
+  const regs = mxHistRegioes[hj] || [];
+  const falta = PG_REGIOES.filter(x => regs.indexOf(x.k) < 0);
+  let tit, txt;
+  if (!regs.length) {
+    tit = '📸 A foto de hoje (' + histRot(hj) + ') ainda não foi guardada';
+    txt = 'Depois que as ' + PG_REGIOES.length + ' regiões subirem o relatório da manhã, clique em '
+      + '<b>Salvar foto de hoje</b> aqui em cima. É essa foto que serve de comparação amanhã.';
+  } else if (falta.length) {
+    tit = '📸 Foto de hoje (' + histRot(hj) + ') guardada pela metade';
+    txt = 'Já tenho ' + regs.length + ' de ' + PG_REGIOES.length + ' regiões. Falta <b>'
+      + falta.map(x => x.rot).join(', ') + '</b>. Quando a região subir o relatório, clique em '
+      + '<b>Salvar foto de hoje</b> que eu completo.';
+  } else {
+    tit = '📸 Foto de hoje (' + histRot(hj) + ') guardada — as '
+      + PG_REGIOES.length + ' regiões, do relatório da manhã';
+    txt = 'Hoje não há o que comparar. A comparação começa amanhã: quando subir o relatório de '
+      + histRot(amK) + ', escolha <b>' + histRot(hj) + '</b> em <i>Comparar com</i> e a tela mostra a manhã de '
+      + histRot(amK) + ' contra a manhã de ' + histRot(hj) + '.';
+  }
+  if (mxHistDiasComparaveis().length) {
+    txt += ' Pra olhar um dia anterior, escolha em <i>Comparar com</i> aqui em cima.';
+  }
+  return '<div style="border:1px solid #f0d8a8;background:#fffcf5;border-radius:16px;padding:12px 14px;margin-bottom:18px;">'
+    + '<div style="font-size:14px;font-weight:800;color:#8a6410;margin-bottom:4px;">' + tit + '</div>'
+    + '<div style="font-size:11.5px;color:var(--gray-500);line-height:1.5;">' + txt + '</div></div>';
+}
+
 function mxHistBloco(ctx) {
-  if (!mxHistDia) return '';
+  if (!mxHistDia) return mxHistAviso();
   const antes = mxHistContagem(mxHistDia, mxHistModo, ctx);
   const agora = mxContagemAtual(mxHistModo, ctx);
   const pill = (m, rot) => '<button class="pg-tipo-btn' + (mxHistModo === m ? ' active' : '')
