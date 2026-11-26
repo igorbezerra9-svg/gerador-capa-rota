@@ -3629,6 +3629,18 @@ function histChave(dia, regiao) { return 'hist|' + dia + '|' + regiao; }
 function histHoje() { return mxKeyDe(new Date()); }
 function histRot(dia) { const p = String(dia).split('-'); return p[2] + '/' + p[1]; }
 
+// Rotulo em relacao a hoje: "hoje de manha", "ontem de manha", ou a data com
+// o dia da semana. Sem isso o seletor so mostrava numeros soltos.
+function histQuando(dia, curto) {
+  const hj = new Date();
+  if (dia === mxKeyDe(hj)) return 'hoje de manhã';
+  const ontem = new Date(hj.getFullYear(), hj.getMonth(), hj.getDate() - 1);
+  if (dia === mxKeyDe(ontem)) return 'ontem de manhã';
+  const p = String(dia).split('-');
+  const sem = MX_DIA_SEM[new Date(+p[0], +p[1] - 1, +p[2]).getDay()];
+  return curto ? sem + ' de manhã' : 'a manhã de ' + sem;
+}
+
 function histResumo(dados, regiao) {
   const mapa = mxMapaMunicipios(dados, regiao);
   const cont = {};
@@ -3721,7 +3733,7 @@ function mxHistPreencherSelect() {
   let h = '<option value="">— sem comparação —</option>';
   (mxHistLista || []).forEach(d => {
     h += '<option value="' + d + '"' + (d === mxHistDia ? ' selected' : '') + '>'
-      + histRot(d) + (d === hj ? ' (foto de hoje)' : '') + '</option>';
+      + histRot(d) + ' · ' + histQuando(d, true) + '</option>';
   });
   sel.innerHTML = h;
 }
@@ -3804,11 +3816,12 @@ function mxHistBloco(ctx) {
     + '" onclick="mxHistSetModo(\'' + m + '\')">' + rot + '</button>';
   let h = '<div style="border:1px solid #f0d8a8;background:#fffcf5;border-radius:16px;padding:14px;margin-bottom:18px;">'
     + '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px;">'
-    + '<div style="font-size:16px;font-weight:800;color:#8a6410;">⏳ Comparado com ' + histRot(mxHistDia) + '</div>'
+    + '<div style="font-size:16px;font-weight:800;color:#8a6410;">⏳ Comparado com '
+    + histQuando(mxHistDia) + ' (' + histRot(mxHistDia) + ')</div>'
     + pill('campo', '🚚 Enviado a campo') + pill('carteira', '📦 Carteira')
     + '</div>'
     + '<div style="font-size:11px;color:var(--gray-400);margin-bottom:10px;">'
-    + 'Número grande = como está agora. Embaixo, quanto mudou desde a foto de ' + histRot(mxHistDia)
+    + 'Número grande = como está agora. Embaixo, quanto mudou desde ' + histQuando(mxHistDia)
     + ' — <b style="color:#1a7a40;">verde para menos</b>, <b style="color:#c0392b;">vermelho para mais</b>. '
     + 'A comparação é por data de vencimento: a coluna 26/11 de hoje fala das mesmas ordens que a coluna 26/11 daquele dia.</div>'
     + '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:12px;white-space:nowrap;">'
