@@ -695,6 +695,9 @@
     </div>
   </div>
 
+  <div id="pg-fonte-topo" style="border:1px solid #cfe2f7;background:#f3f8ff;border-radius:10px;
+padding:8px 12px;margin-bottom:14px;font-size:11.5px;color:#14487e;line-height:1.5;"></div>
+
   <div id="pg-sem-dados" style="display:none;text-align:center;padding:60px;color:var(--gray-400);">
     <div style="font-size:40px;margin-bottom:12px;">☁</div>
     <div style="font-size:16px;font-weight:600;">Nenhum dado na nuvem para essa região</div>
@@ -2265,7 +2268,7 @@ function pgSetTipo(t) {
 async function pgCarregar(forcar) {
   showToast('⏳ Carregando painel...');
   try {
-    const pac = await pgFetchRegiao(pgRegiao, forcar);
+    const pac = await pgFetchRegiao(pgRegiao, forcar, 'relatorio', PG_CACHE_EQ);
     if (!pac.dados.length) {
       document.getElementById('pg-sem-dados').style.display = 'block';
       document.getElementById('pg-content').style.display = 'none';
@@ -2276,7 +2279,7 @@ async function pgCarregar(forcar) {
     document.getElementById('pg-content').style.display = 'block';
     pgDados = pac.dados;
     const dt = new Date(pac.atualizado);
-    pgAtualizado = 'Dados da nuvem · ' + pgRegiao + ' · ' + dt.toLocaleDateString('pt-BR') + ' ' + dt.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+    pgAtualizado = '↻ Relatório publicado · ' + pgRegiao + ' · ' + dt.toLocaleDateString('pt-BR') + ' ' + dt.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
     pgRender();
     showToast('✔ Painel carregado — ' + pgDados.length + ' registros', 2000);
   } catch(e) {
@@ -2318,6 +2321,14 @@ function pgRender() {
   pgRenderEquipesCriticas(dados);
   pgRenderTabela();
   document.getElementById('pg-atualizado').textContent = pgAtualizado;
+  // No topo, onde o olho bate primeiro. Nos dias em que a regiao republica a
+  // tarde esta aba e a de campo & carteira mostram numeros diferentes de
+  // proposito, e sem isso parece erro.
+  const topo = document.getElementById('pg-fonte-topo');
+  if (topo) topo.innerHTML = '<b>↻ Esta aba acompanha o relatório publicado.</b> '
+    + 'Cada vez que a região republica, estes números mudam — a aba '
+    + '<b>Enviado a campo &amp; carteira</b> continua na foto da manhã. '
+    + '<span style="opacity:.75;">' + mxEsc(pgAtualizado) + '</span>';
   const pgUpd = document.getElementById('pg-last-update');
   if (pgUpd) pgUpd.textContent = pgAtualizado;
 }
@@ -2860,6 +2871,7 @@ function recarregarRegiao() {
   fecharBanner();
   if (regiaoComAtualizacao) {
     delete PG_CACHE[regiaoComAtualizacao];
+    delete PG_CACHE_EQ[regiaoComAtualizacao];
     carregarNuvem(regiaoComAtualizacao);
     // Se o painel estiver aberto, atualiza também
     if (pgView !== 'equipes') mxCarregar(true);
@@ -2952,6 +2964,12 @@ function mxEsc(s) {
 // e é esse tráfego repetido que estoura a cota de egress do Supabase.
 const PG_CACHE = {};
 
+// A aba Equipes nao segue a foto. As meninas republicam o relatorio de tarde
+// pra tirar o acompanhamento, e e esse numero que elas precisam ver ali. Por
+// isso tem cache proprio: "Enviado a campo & carteira" continua preso na foto,
+// entao as duas abas leem a mesma regiao de fontes diferentes ao mesmo tempo.
+const PG_CACHE_EQ = {};
+
 // De onde o painel le: 'foto' = a foto que o Igor salvou hoje, 'relatorio' =
 // o que esta publicado agora. A foto e o padrao, porque e o momento que ele
 // escolheu; o relatorio da tarde mudava os numeros debaixo do pe dele.
@@ -2987,10 +3005,14 @@ async function pgBuscarBruta(regiao) {
   return (rows[0] && rows[0].dados) || null;
 }
 
-async function pgFetchRegiao(regiao, forcar) {
-  if (!forcar && PG_CACHE[regiao] && PG_CACHE[regiao].fonte === mxFonte) return PG_CACHE[regiao];
+// Quem chama diz de onde quer ler e onde guardar. Sem fonte, segue mxFonte,
+// que e a fonte da aba Enviado a campo & carteira.
+async function pgFetchRegiao(regiao, forcar, fonte, cache) {
+  fonte = fonte || mxFonte;
+  cache = cache || PG_CACHE;
+  if (!forcar && cache[regiao] && cache[regiao].fonte === fonte) return cache[regiao];
   let dados = [], atualizado = null, dia = null;
-  if (mxFonte === 'foto') {
+  if (fonte === 'foto') {
     const f = await pgBuscarBruta(regiao);
     if (f) { dados = f.bruto || []; atualizado = f.fonte || null; dia = f.dia || null; }
   } else {
@@ -3001,7 +3023,7 @@ async function pgFetchRegiao(regiao, forcar) {
     dados = (rows[0] && rows[0].dados) || [];
     atualizado = rows[0] ? rows[0].atualizado_em : null;
   }
-  const pac = { regiao, dados, atualizado, dia, fonte: mxFonte };
+  const pac = { regiao, dados, atualizado, dia, fonte };
   pac.muniUnidade = mxMapaMunicipios(pac.dados, regiao);
   // Carteira completa? Se a região só publica o que está em campo, a aba
   // Carteira fica capenga pra ela e isso precisa aparecer na tela.
@@ -3010,7 +3032,7 @@ async function pgFetchRegiao(regiao, forcar) {
     r.__reg = regiao;
     r.__uni = mxUnidade(r, regiao, pac.muniUnidade);
   });
-  PG_CACHE[regiao] = pac;
+  cache[regiao] = pac;
   return pac;
 }
 
